@@ -723,21 +723,28 @@
     });
     stage.appendChild(frag);
 
-            // Auto-fit: shrink font size for any span that overflows its text box
-    stage.querySelectorAll(".el.text:not(.flow) span").forEach(function (sp) {
-      var box = sp.closest(".el.text");
+                // Auto-fit: shrink font size for any span that overflows its text box
+    stage.querySelectorAll(".el.text:not(.flow) p").forEach(function (pn) {
+      var box = pn.closest(".el.text");
       if (box) {
-        // Measure text width using canvas for accuracy
-        var canvas = document.createElement("canvas");
-        var ctx = canvas.getContext("2d");
-        var style = window.getComputedStyle(sp);
-        ctx.font = style.fontStyle + " " + style.fontWeight + " " + style.fontSize + " " + style.fontFamily;
-        var textWidth = ctx.measureText(sp.textContent).width;
-        var boxW = box.clientWidth - 16; // account for padding
+        // Clone the paragraph to measure full text width without wrapping
+        var clone = pn.cloneNode(true);
+        clone.style.position = "absolute";
+        clone.style.whiteSpace = "nowrap";
+        clone.style.width = "auto";
+        clone.style.height = "auto";
+        clone.style.visibility = "hidden";
+        box.appendChild(clone);
+        var textWidth = clone.scrollWidth;
+        var boxW = box.clientWidth;
+        box.removeChild(clone);
         if (textWidth > boxW) {
-          var scale = boxW / textWidth;
-          var fs = parseFloat(style.fontSize);
-          sp.style.fontSize = (fs * scale * 0.95) + "px";
+          var spans = clone.querySelectorAll("span");
+          pn.querySelectorAll("span").forEach(function (sp, i) {
+            var fs = parseFloat(window.getComputedStyle(sp).fontSize);
+            var newFs = fs * (boxW / textWidth) * 0.95;
+            sp.style.fontSize = newFs + "px";
+          });
         }
       }
     });
