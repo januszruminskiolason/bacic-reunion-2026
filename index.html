@@ -350,7 +350,12 @@
 
     elem.paragraphs.forEach(function (p) {
       var pn = newEl("p", p.align === "ctr" ? "c" : (p.align === "r" ? "r" : "l"));
-      p.runs.forEach(function (r) {
+      var runs = p.runs;
+      if (runs.length) {
+        runs[0].t = runs[0].t.replace(/^\s+/, "");
+        runs[runs.length - 1].t = runs[runs.length - 1].t.replace(/\s+$/, "");
+      }
+      runs.forEach(function (r) {
         if (r.br) { pn.appendChild(document.createElement("br")); return; }
         var span = newEl("span");
         var sz = r.sz || defSize || baseSizes[r.lvl || 0] || 1800;
