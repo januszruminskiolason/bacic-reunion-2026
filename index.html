@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Rodzina Bacic — Spotkanie Rodzinne</title>
+<style>
+  :root{
+    --cream:#F9F7F3;
+    --brown:#514A40;
+    --terracotta:#A85229;
+    --gold:#C9A645;
+    --olive:#98916E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:#1c1917;overflow:hidden;}
+  html{-webkit-text-size-adjust:100%;}
+  @supports (height:100dvh){html,body{height:100dvh;}}
+  body{
+    font-family:Cambria,Georgia,'Times New Roman',serif;
+    color:var(--brown);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+    touch-action:pan-x pan-y;
+  }
+
+  /* ---------- viewport / scaling (responsive) ---------- */
+  #viewport{position:fixed;inset:0;overflow:hidden;
+    background:radial-gradient(circle at 50% 40%,#2a2622,#141210 90%);
+    touch-action:pan-x pan-y;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  /* deck chrome reproduced from the master */
+  #stage{
+    position:absolute;left:50%;top:50%;
+    width:1280px;height:720px;max-width:none;max-height:none;
+    transform-origin:center center;
+    background-color:var(--cream);
+    background-size:cover;background-position:center;background-repeat:no-repeat;
+    overflow:hidden;
+    box-shadow:0 24px 70px rgba(0,0,0,.55);
+    will-change:transform,opacity;
+  }
+  #stage.anim-next{animation:slideNext .42s ease both;}
+  #stage.anim-prev{animation:slidePrev .42s ease both;}
+  @keyframes slideNext{from{opacity:0;transform:translate(-50%,-50%) scale(var(--s)) translateX(60px);}
+    to{opacity:1;transform:translate(-50%,-50%) scale(var(--s)) translateX(0);}}
+  @keyframes slidePrev{from{opacity:0;transform:translate(-50%,-50%) scale(var(--s)) translateX(-60px);}
+    to{opacity:1;transform:translate(-50%,-50%) scale(var(--s)) translateX(0);}}
+
+  /* deck chrome reproduced from the master */
+  .chrome-bar{position:absolute;left:0;width:100%;
+    top:calc(6257036 / 6858000 * 100%);height:calc(54864 / 6858000 * 100%);
+    background:var(--terracotta);
+    box-shadow:0 1px 4px rgba(81,74,64,.45) inset,0 1px 3px rgba(0,0,0,.25);
+    z-index:9000;pointer-events:none;}
+
+  /* ---------- slide elements ---------- */
+  .el{position:absolute;}
+  .el.img{object-fit:fill;display:block;}
+  .el.img.bg{z-index:-1;}
+  /* PowerPoint srcRect cropping: wrapper clips, inner img is scaled + shifted */
+  .el.imgwrap{overflow:hidden;cursor:zoom-in;background:rgba(81,74,64,.08);}
+  .el.imgwrap img{position:absolute;display:block;}
+  .el.imgwrap:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+  /* video elements (e.g. slide 3) reuse slide geometry */
+  .el.vid{display:block;background:#000;cursor:zoom-in;position:absolute;overflow:hidden;}
+  .el.vid video{width:100%;height:100%;object-fit:fill;display:block;background:#000;}
+  .el.vid:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+
+  .el.text{display:flex;white-space:pre-wrap;line-height:1.2;}
+  .el.text.v-t{align-items:flex-start;}
+  .el.text.v-ctr{align-items:center;}
+  .el.text.v-b{align-items:flex-end;}
+  .el.text > .pad{width:100%;min-width:0;}
+
+  /* Long / overflowing text blocks (e.g. slide 2): flow top→bottom,
+     stretch left→right, inside the slide instead of fixed columns. */
+  .el.flow{display:block;overflow-y:auto;overflow-x:hidden;white-space:normal;
+    scrollbar-width:thin;scrollbar-color:var(--olive) transparent;}
+  .el.flow::-webkit-scrollbar{width:8px;}
+  .el.flow::-webkit-scrollbar-thumb{background:rgba(152,145,110,.55);border-radius:4px;}
+  .el.flow .prose{width:100%;white-space:normal;line-height:1.28;}
+  .el.flow .prose p{margin:0 0 .55em;width:100%;}
+  .el.flow .prose p:last-child{margin-bottom:0;}
+
+  .el.text p{margin:0;width:100%;}
+  .el.text .c{text-align:center;}
+  .el.text .r{text-align:right;}
+
+  /* ---------- slide 2: flowing story text, single block top-to-bottom ----------
+     The source shape is taller than the 16:9 slide (h ≈ 1.39) and PowerPoint
+     clips it at the slide edge. On the web we instead clamp it to the visible
+     slide box, stretch it left→right and let it scroll INSIDE the slide. */
+  .el.text.flow{
+    display:block;
+    overflow-y:auto;            /* long story scrolls inside the slide */
+    overflow-x:hidden;
+    white-space:normal;
+    line-height:1.32;
+    padding-right:18px;         /* room for inner scrollbar */
+    scrollbar-width:thin;
+    scrollbar-color:var(--olive) transparent;
+    pointer-events:auto;
+    column-count:1 !important;
+    columns:1 !important;
+    column-width:auto !important;
+    -webkit-columns:1 !important;
+  }
+  .el.text.flow::-webkit-scrollbar{width:8px;}
+  .el.text.flow::-webkit-scrollbar-thumb{background:rgba(152,145,110,.55);border-radius:4px;}
+  .el.text.flow p{margin:0 0 .55em;width:100%;}
+
+  .el.text.role-title,.el.text.role-ctrTitle{
+    color:var(--terracotta);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    text-shadow:0 1px 2px rgba(249,247,243,.85),0 2px 6px rgba(81,74,64,.30);
+    z-index:5000;
+  }
+  .el.text.role-subTitle{color:var(--brown);z-index:5000;}
+  .el.text.role-body,.el.text.role-obj,.el.text.role-other{color:var(--brown);z-index:4000;}
+  .el.text.role-other{text-shadow:0 1px 2px rgba(249,247,243,.9),0 1px 4px rgba(81,74,64,.35);}
+
+  /* focus / picture browsing */
+  .browsable{transition:opacity .22s ease,box-shadow .22s ease;z-index:2000;cursor:zoom-in;}
+  #stage.focus-mode .browsable{opacity:.28;filter:saturate(.85);}
+  #stage.focus-mode .browsable.focused{
+    opacity:1;filter:none;z-index:6000;
+    box-shadow:0 0 0 4px var(--terracotta),0 14px 44px rgba(0,0,0,.55);
+  }
+
+  /* ---------- lightbox: click / Enter on a picture ---------- */
+  #lightbox{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;
+    background:rgba(15,13,11,.92);padding:4vmin;cursor:zoom-out;}
+  #lightbox.open{display:flex;}
+  #lightbox figure{margin:0;max-width:min(92vw,1400px);max-height:88vh;display:flex;
+    flex-direction:column;align-items:center;gap:10px;cursor:default;}
+  #lightbox img,#lightbox video{max-width:min(92vw,1400px);max-height:78vh;object-fit:contain;
+    border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,.7);background:#000;}
+  #lightbox figcaption{color:var(--cream);font-size:14px;letter-spacing:.5px;opacity:.9;
+    text-align:center;max-width:90vw;}
+  #lightbox .lb-count{color:var(--gold);font-size:12px;letter-spacing:2px;}
+  #lightbox .lb-nav{position:absolute;top:50%;transform:translateY(-50%);
+    background:rgba(249,247,243,.12);color:var(--cream);border:1px solid rgba(249,247,243,.25);
+    width:48px;height:64px;border-radius:10px;font-size:24px;cursor:pointer;}
+  #lightbox .lb-nav:hover{background:rgba(168,82,41,.7);}
+  #lightbox .lb-prev{left:12px;}
+  #lightbox .lb-next{right:12px;}
+  #lightbox .lb-close{position:absolute;top:14px;right:16px;background:none;border:none;
+    color:var(--cream);font-size:30px;cursor:pointer;line-height:1;opacity:.8;}
+  #lightbox .lb-close:hover{opacity:1;color:var(--gold);}
+
+  /* ---------- music mute button (bottom-right, on all pages) ---------- */
+  #mute{position:fixed;right:18px;bottom:18px;z-index:90;
+    width:40px;height:40px;border-radius:999px;border:1px solid rgba(249,247,243,.35);
+    background:rgba(20,18,16,.72);color:var(--cream);font-size:18px;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 16px rgba(0,0,0,.45);}
+  #mute:hover{background:var(--terracotta);}
+  #mute:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+
+  /* ---------- HUD ---------- */
+  #hud-caption{
+    position:absolute;left:50%;bottom:26px;transform:translateX(-50%);
+    max-width:70%;text-align:center;color:var(--cream);
+    font-size:15px;letter-spacing:.4px;opacity:0;transition:opacity .3s ease;
+    text-shadow:0 2px 10px rgba(0,0,0,.8);pointer-events:none;
+  }
+  #hud-caption.show{opacity:.92;}
+
+  #progress{position:fixed;left:0;top:0;height:3px;width:0;
+    background:linear-gradient(90deg,var(--terracotta),var(--gold));
+    z-index:50;transition:width .35s ease;}
+
+  #counter{
+    position:fixed;right:18px;bottom:18px;z-index:50;
+    font-family:Cambria,Georgia,serif;font-size:14px;letter-spacing:1px;
+    color:var(--terracotta);background:var(--cream);
+    padding:6px 14px;border-radius:999px;
+    box-shadow:0 4px 16px rgba(0,0,0,.45);
+    user-select:none;
+  }
+  #counter b{color:var(--brown);font-weight:700;}
+
+  #brand{
+    position:fixed;left:18px;bottom:18px;z-index:50;
+    font-size:13px;letter-spacing:2px;text-transform:uppercase;
+    color:rgba(249,247,243,.75);user-select:none;
+  }
+  #brand span{color:var(--gold);}
+
+  #help{
+    position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+    background:rgba(20,18,16,.86);backdrop-filter:blur(4px);
+    transition:opacity .35s ease;cursor:pointer;
+  }
+  #help.hide{opacity:0;pointer-events:none;}
+  #help .card{
+    background:var(--cream);border-radius:14px;padding:30px 40px;max-width:620px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6);text-align:center;
+  }
+  #help h1{margin:0 0 6px;color:var(--terracotta);font-size:30px;
+    text-transform:uppercase;letter-spacing:1px;}
+  #help h2{margin:0 0 22px;color:var(--olive);font-weight:400;font-size:14px;
+    text-transform:uppercase;letter-spacing:3px;}
+  #help ul{list-style:none;padding:0;margin:0;color:var(--brown);font-size:15px;line-height:2;}
+  #help kbd{
+    display:inline-block;min-width:26px;padding:2px 8px;margin:0 4px;
+    background:#fff;border:1px solid #d9d3c9;border-bottom-width:2px;border-radius:6px;
+    font-family:inherit;font-size:13px;color:var(--brown);
+  }
+  #help .hint{margin-top:20px;font-size:12px;letter-spacing:1px;color:var(--olive);}
+
+  #error{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    background:#141210;color:var(--cream);font-size:15px;line-height:1.7;padding:40px;text-align:center;}
+  #error code{color:var(--gold);}
+</style>
+</head>
+<body>
+  <div id="progress"></div>
+  <div id="viewport">
+    <div id="stage">
+      <div class="chrome-bar"></div>
+    </div>
+  </div>
+
+  <div id="hud-caption"></div>
+  <div id="counter"><b id="cur">1</b> / <span id="tot">–</span></div>
+  <div id="brand">Rodzina <span>Bacic</span></div>
+  <button id="mute" type="button" title="Wycisz / włącz muzykę" aria-label="Wycisz / włącz muzykę">🔇</button>
+  <audio id="bgmusic" loop preload="auto"></audio>
+
+  <div id="lightbox" role="dialog" aria-modal="true" aria-label="Podgląd zdjęcia">
+    <button class="lb-close" type="button" aria-label="Zamknij">×</button>
+    <button class="lb-nav lb-prev" type="button" aria-label="Poprzednie zdjęcie">‹</button>
+    <figure>
+      <div id="lb-media"></div>
+      <figcaption><span id="lb-cap"></span> <span class="lb-count" id="lb-count"></span></figcaption>
+    </figure>
+    <button class="lb-nav lb-next" type="button" aria-label="Następne zdjęcie">›</button>
+  </div>
+
+  <div id="help">
+    <div class="card">
+      <h1>Rodzina Bacic</h1>
+      <h2>Polanów · 19.09.2026</h2>
+      <ul>
+        <li>Przewijaj &nbsp;<kbd>kółkiem</kbd> — przechodzi między częściami prezentacji</li>
+        <li><kbd>←</kbd><kbd>→</kbd> przeglądaj zdjęcia / slajdy wstecz i dalej</li>
+        <li><kbd>↑</kbd><kbd>↓</kbd> poprzedni / następny slajd</li>
+        <li>Kliknij zdjęcie lub <kbd>Enter</kbd> — podgląd na pełnym ekranie</li>
+        <li><kbd>Esc</kbd> powrót do widoku całego slajdu</li>
+      </ul>
+      <div class="hint">Kliknij, aby rozpocząć</div>
+    </div>
+  </div>
+
+  <div id="error">
+    <div>
+      <p><strong>Nie można wczytać prezentacji.</strong></p>
+      <p>Otwórz tę stronę przez lokalny serwer (pliki <code>file://</code> są blokowane):</p>
+      <p><code>cd ~/Desktop/bacic-reunion && python3 -m http.server 8000</code></p>
+      <p>potem wejdź na <code>http://localhost:8000</code></p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STAGE_W = 1280, STAGE_H = 720;
+  var PT = STAGE_H / 540;           // 1 pt -> px on the 720px stage
+  var BIG_AREA = 0.85;              // full-bleed photos become backgrounds
+  var BODY_SZ = [2000, 1800, 1600, 1400, 1400, 1400, 1400, 1400, 1400];
+
+  var stage    = document.getElementById("stage");
+  var viewport = document.getElementById("viewport");
+  var help     = document.getElementById("help");
+  var errorBox = document.getElementById("error");
+  var elCur    = document.getElementById("cur");
+  var elTot    = document.getElementById("tot");
+  var elProg   = document.getElementById("progress");
+  var elCap    = document.getElementById("hud-caption");
+
+  var DATA = null;
+  var slides = [];
+  var index = 0;
+  var focusIdx = null;          // index into currentImages, or null
+  var currentImages = [];       // browsable image nodes on current slide
+  var wheelLock = false;
+  var bgMuted = true;           // global background music mute state
+  var bgAudio = null;           // the <audio id="bgmusic"> element
+  var lastBrowsableNode = null; // last clicked/focused browsable image (for Enter key)
+
+  /* ------------------------------------------------------------ utils */
+  function pxX(f) { return f * STAGE_W; }
+  function pxY(f) { return f * STAGE_H; }
+
+  function newEl(tag, cls) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    return n;
+  }
+
+  function applyGeom(node, g) {
+    node.style.left   = pxX(g.x) + "px";
+    node.style.top    = pxY(g.y) + "px";
+    node.style.width  = pxX(g.w) + "px";
+    node.style.height = pxY(g.h) + "px";
+    var t = [];
+    if (g.rot) t.push("rotate(" + g.rot + "deg)");
+    if (g.flipH) t.push("scaleX(-1)");
+    if (g.flipV) t.push("scaleY(-1)");
+    if (t.length) {
+      node.style.transform = t.join(" ");
+      node.style.transformOrigin = "center center";
+    }
+  }
+
+  function roleClass(role) {
+    if (!role) return "role-other";
+    if (role === "title" || role === "ctrTitle") return "role-title";
+    if (role === "subTitle") return "role-subTitle";
+    if (role === "body" || role === "obj") return "role-body";
+    return "role-other";
+  }
+
+  function buildText(elem) {
+    var role = elem.role || "other";
+    var g = elem.geom;
+    var isLong = g && (g.h > 1.02 || (g.w >= 0.95 && g.h >= 0.8));
+    var box = newEl("div", "el text" + (isLong ? " flow" : "") + " v-" + (elem.anchor || "t") + " " + roleClass(role));
+    if (isLong) {
+      // stretch the text box to fill the slide left→right, anchored top→bottom
+      box.style.left = "0px";
+      box.style.top = pxY(Math.min(g.y, 0)) + "px";
+      box.style.width = pxX(1) + "px";
+      box.style.height = pxY(Math.max(g.h, 1)) + "px";
+      box.style.maxHeight = pxY(STAGE_H) + "px";
+      box.style.pointerEvents = "auto";
+    } else {
+      applyGeom(box, g);
+    }
+
+    var isTitle = (role === "title" || role === "ctrTitle");
+    var defSize = isTitle ? 3200 : null;
+    var defColor = elem.defaultColor || (isTitle ? "#A85229" : "#514A40");
+    var baseSizes = elem.defaultSize || BODY_SZ;
+
+    elem.paragraphs.forEach(function (p) {
+      var pn = newEl("p", p.align === "ctr" ? "c" : (p.align === "r" ? "r" : "l"));
+      p.runs.forEach(function (r) {
+        if (r.br) { pn.appendChild(document.createElement("br")); return; }
+        var span = newEl("span");
+        var sz = r.sz || defSize || baseSizes[r.lvl || 0] || 1800;
+        span.style.fontSize = (sz * PT / 100) + "px";
+        if (r.b || isTitle) span.style.fontWeight = "700";
+        if (r.i) span.style.fontStyle = "italic";
+        if (r.u && r.u !== "none") span.style.textDecoration = "underline";
+        span.style.color = r.color || defColor;
+        span.textContent = r.t;
+        pn.appendChild(span);
+      });
+      box.appendChild(pn);
+    });
+    return box;
+  }
+
+  function isFullBleed(elem) {
+    var g = elem.geom;
+    return (g.w * g.h) >= BIG_AREA || (g.w >= 0.97 && g.h >= 0.97);
+  }
+
+  // Pictures are clickable: open a lightbox preview. We keep the
+  // slide element's document position as the lightbox order.
+  function tagBrowsable(node, src, kind, poster) {
+    node.classList.add("browsable");
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("role", "button");
+    node.setAttribute("data-src", src || "");
+    node.setAttribute("data-kind", kind || "image");
+    if (poster) node.setAttribute("data-poster", poster);
+    currentImages.push(node);
+    node.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      node.focus();
+      lastBrowsableNode = node;
+      openLightbox(currentImages.indexOf(node));
+    });
+    node.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
+        ev.preventDefault(); ev.stopPropagation();
+        openLightbox(currentImages.indexOf(node));
+      }
+    });
+  }
+
+  function buildVideo(elem) {
+    var box = newEl("div", "el vid");
+    applyGeom(box, elem.geom);
+    var v = document.createElement("video");
+    v.src = elem.src;
+    if (elem.poster) v.poster = elem.poster;
+    v.autoplay = true; v.loop = true; v.playsInline = true;
+    v.setAttribute("autoplay", ""); v.setAttribute("loop", "");
+    v.setAttribute("playsinline", "");
+    v.controls = false;
+    box.appendChild(v);
+    // video is not a browsable picture — don't add to currentImages
+    box.setAttribute("tabindex", "0");
+    box.setAttribute("role", "button");
+    box.setAttribute("aria-label", "Wideo — kliknij aby zapisać");
+    // respect global mute state; start muted if bgMuted so autoplay works
+    v.muted = bgMuted;
+    if (bgMuted) v.setAttribute("muted", "");
+    else         v.removeAttribute("muted");
+    var p = v.play(); if (p && p.catch) p.catch(function () {});
+    return box;
+  }
+
+  function buildImage(elem) {
+    var big = isFullBleed(elem);
+
+    // cropped picture (PowerPoint <a:srcRect>): clip wrapper + scaled inner img
+    if (elem.crop) {
+      var c = elem.crop;
+      var cw = 1 - c.l - c.r, ch = 1 - c.t - c.b;
+      var wrap = newEl("div", "el imgwrap");
+      applyGeom(wrap, elem.geom);
+      if (big) { wrap.classList.add("bg"); }
+      else     { wrap.classList.add("slide-img"); tagBrowsable(wrap, elem.src, "image"); }
+      var inner = newEl("img");
+      inner.style.width = (100 / cw) + "%";
+      inner.style.height = (100 / ch) + "%";
+      inner.style.left = (-c.l / cw * 100) + "%";
+      inner.style.top = (-c.t / ch * 100) + "%";
+      inner.src = elem.src;
+      inner.draggable = false;
+      inner.alt = "";
+      wrap.appendChild(inner);
+      return wrap;
+    }
+
+    var img = newEl("img", "el img");
+    applyGeom(img, elem.geom);
+    img.src = elem.src;
+    img.draggable = false;
+    img.alt = "";
+    if (big) { img.classList.add("bg", "bgimg"); }
+    else     { img.classList.add("slide-img"); tagBrowsable(img, elem.src, "image"); }
+    return img;
+  }
+
+  /* ------------------------------------------------ lightbox: picture preview */
+  var lightbox       = document.getElementById("lightbox");
+  var lbMedia        = document.getElementById("lb-media");
+  var lbCap          = document.getElementById("lb-cap");
+  var lbCount        = document.getElementById("lb-count");
+  var lbClose        = lightbox.querySelector(".lb-close");
+  var lbNavPrev      = lightbox.querySelector(".lb-prev");
+  var lbNavNext      = lightbox.querySelector(".lb-next");
+  var lbCurrentSlide = -1;      // slide index we opened from
+  var lbCurrentIdx   = -1;      // index into currentImages
+
+  function openLightbox(idx) {
+    if (!currentImages.length) return;
+    lbCurrentIdx   = idx;
+    lbCurrentSlide = index;
+    focusIdx = idx;
+    updateFocus();
+    renderLightboxImage();
+    lightbox.classList.add("open");
+    lbClose.focus();
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove("open");
+    lbMedia.innerHTML = "";
+    lbCap.textContent = "";
+    lbCount.textContent = "";
+    if (lbCurrentSlide >= 0 && lbCurrentSlide < slides.length) {
+      renderSlide(lbCurrentSlide, "prev");
+    }
+    lbCurrentSlide = -1;
+    lbCurrentIdx   = -1;
+    focusIdx = null;
+    updateFocus();
+  }
+
+  function renderLightboxImage() {
+    lbMedia.innerHTML = "";
+    if (lbCurrentIdx < 0 || lbCurrentIdx >= currentImages.length) return;
+    var node = currentImages[lbCurrentIdx];
+    var src = node.getAttribute("data-src") || "";
+    var kind = node.getAttribute("data-kind") || "image";
+    var poster = node.getAttribute("data-poster") || "";
+    if (kind === "video") {
+      var v = document.createElement("video");
+      v.src = src;
+      if (poster) v.poster = poster;
+      v.autoplay = true; v.loop = true; v.playsInline = true; v.muted = bgMuted;
+      v.setAttribute("autoplay", ""); v.setAttribute("loop", "");
+      v.setAttribute("playsinline", "");
+      if (bgMuted) v.setAttribute("muted", "");
+      v.style.maxWidth = "min(92vw,1400px)";
+      v.style.maxHeight = "78vh";
+      v.style.objectFit = "contain";
+      v.style.borderRadius = "8px";
+      v.style.boxShadow = "0 24px 80px rgba(0,0,0,.7)";
+      v.style.background = "#000";
+      v.style.display = "block";
+      lbMedia.appendChild(v);
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+    } else {
+      var im = document.createElement("img");
+      im.src = src;
+      im.alt = "";
+      im.draggable = false;
+      im.style.maxWidth = "min(92vw,1400px)";
+      im.style.maxHeight = "78vh";
+      im.style.objectFit = "contain";
+      im.style.borderRadius = "8px";
+      im.style.boxShadow = "0 24px 80px rgba(0,0,0,.7)";
+      im.style.background = "#000";
+      im.style.display = "block";
+      lbMedia.appendChild(im);
+    }
+    var total = currentImages.length;
+    lbCount.textContent = (lbCurrentIdx + 1) + " / " + total;
+    // caption: use slide caption + picture position
+    var slide = slides[lbCurrentSlide];
+    var cap = captionFor(slide, lbCurrentSlide);
+    if (cap) {
+      lbCap.textContent = cap + "  ·  zdjęcie " + (lbCurrentIdx + 1) + " z " + total;
+    } else {
+      lbCap.textContent = "zdjęcie " + (lbCurrentIdx + 1) + " z " + total;
+    }
+  }
+
+  function lbNext() {
+    if (lbCurrentIdx < 0) return;
+    if (lbCurrentIdx < currentImages.length - 1) {
+      lbCurrentIdx++;
+      renderLightboxImage();
+    } else {
+      // last picture on this slide → close lightbox, stay on current slide
+      closeLightbox();
+    }
+  }
+
+  function lbPrev() {
+    if (lbCurrentIdx <= 0) {
+      // already at first picture: could go to previous slide, but spec says
+      // only "after last picture go to next page". Stay at first.
+      return;
+    }
+    lbCurrentIdx--;
+    renderLightboxImage();
+  }
+
+  lbClose.addEventListener("click", function (ev) { ev.stopPropagation(); closeLightbox(); });
+  lbNavPrev.addEventListener("click", function (ev) { ev.stopPropagation(); lbPrev(); });
+  lbNavNext.addEventListener("click", function (ev) { ev.stopPropagation(); lbNext(); });
+  lightbox.addEventListener("click", function (ev) {
+    if (ev.target === lightbox) closeLightbox();
+  });
+  lightbox.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") { ev.preventDefault(); closeLightbox(); }
+    else if (ev.key === "ArrowRight") { ev.preventDefault(); lbNext(); }
+    else if (ev.key === "ArrowLeft")  { ev.preventDefault(); lbPrev(); }
+    else if (ev.key === "Enter")      { ev.preventDefault(); closeLightbox(); }
+  });
+
+  function buildShape(elem) {
+    var d = newEl("div", "el shape");
+    applyGeom(d, elem.geom);
+    d.style.background = elem.fill || "transparent";
+    d.style.borderRadius = "2px";
+    return d;
+  }
+
+  /* ------------------------------------------------ background music */
+  function initAudio() {
+    bgAudio = document.getElementById("bgmusic");
+    if (!bgAudio) return;
+    if (DATA && DATA.audio) {
+      bgAudio.src = DATA.audio;
+    }
+    bgAudio.loop = true;
+    bgAudio.preload = "auto";
+    bgAudio.muted = bgMuted;
+    if (bgMuted) bgAudio.setAttribute("muted", "");
+    else         bgAudio.removeAttribute("muted");
+    // best-effort autoplay: browsers block unmuted autoplay, so start muted
+    // and unmute on first user interaction.
+    var p = bgAudio.play(); if (p && p.catch) p.catch(function () {});
+  }
+
+  function setMuteButtonLabel() {
+    var btn = document.getElementById("mute");
+    if (!btn) return;
+    btn.textContent = bgMuted ? "🔇" : "🔊";
+    btn.setAttribute("aria-label", bgMuted ? "Włącz muzykę" : "Wycisz muzykę");
+    btn.setAttribute("title", bgMuted ? "Włącz muzykę" : "Wycisz muzykę");
+  }
+
+  function toggleMute() {
+    bgMuted = !bgMuted;
+    if (bgAudio) {
+      bgAudio.muted = bgMuted;
+      if (bgMuted) bgAudio.setAttribute("muted", "");
+      else         bgAudio.removeAttribute("muted");
+      if (!bgMuted) { var p = bgAudio.play(); if (p && p.catch) p.catch(function () {}); }
+    }
+    setMuteButtonLabel();
+    // sync all videos currently on screen
+    var vids = stage.querySelectorAll("video");
+    vids.forEach(function (v) {
+      v.muted = bgMuted;
+      if (bgMuted) v.setAttribute("muted", "");
+      else         v.removeAttribute("muted");
+    });
+  }
+
+  function syncAllVideos() {
+    var vids = stage.querySelectorAll("video");
+    vids.forEach(function (v) {
+      v.muted = bgMuted;
+      if (bgMuted) v.setAttribute("muted", "");
+      else         v.removeAttribute("muted");
+    });
+  }
+
+  // mute button
+  (function () {
+    var btn = document.getElementById("mute");
+    if (btn) {
+      btn.addEventListener("click", function (ev) { ev.stopPropagation(); toggleMute(); });
+    }
+  })();
+
+  // on first user interaction, try to unmute background music if it's not muted
+  function onFirstInteraction() {
+    if (!bgMuted && bgAudio) {
+      // already unmuted
+      return;
+    }
+    if (bgAudio) {
+      bgMuted = false;
+      bgAudio.muted = false;
+      bgAudio.removeAttribute("muted");
+      var p = bgAudio.play(); if (p && p.catch) p.catch(function () {});
+      setMuteButtonLabel();
+      syncAllVideos();
+    }
+  }
+
+  document.addEventListener("click", onFirstInteraction, { once: true });
+  document.addEventListener("keydown", onFirstInteraction, { once: true });
+
+  /* ------------------------------------------------------- render slide */
+  function renderSlide(i, dir) {
+    index = Math.max(0, Math.min(slides.length - 1, i));
+    var slide = slides[index];
+    focusIdx = null;
+    currentImages = [];
+    lastBrowsableNode = null;
+
+    // remove previous content (keep chrome bar)
+    var keep = stage.querySelector(".chrome-bar");
+    stage.innerHTML = "";
+    if (keep) stage.appendChild(keep); else {
+      var bar = newEl("div", "chrome-bar"); stage.appendChild(bar);
+    }
+    stage.classList.remove("focus-mode");
+
+    // Slide backdrop: the slide's own <p:bg> if it has one (e.g. slide 1),
+    // otherwise the inherited slide-master background texture.
+    var bgSrc = slide.background || (DATA && DATA.masterBackground) || null;
+    stage.style.backgroundImage = bgSrc ? "url('" + bgSrc + "')" : "none";
+
+    // Keep PowerPoint document order (= z-order) but paint full-bleed photos
+    // first, so they act as the slide backdrop instead of hiding the content
+    // that PowerPoint reveals later via entrance animations.
+    var bgs = [], normal = [];
+    slide.elements.forEach(function (e) {
+      (e.kind === "image" && isFullBleed(e) ? bgs : normal).push(e);
+    });
+
+    function makeNode(e) {
+      if (e.kind === "image") {
+        var node = buildImage(e);
+        return node;
+      }
+      if (e.kind === "text")  return buildText(e);
+      if (e.kind === "shape") return buildShape(e);
+      if (e.kind === "video") return buildVideo(e);
+      return null;
+    }
+
+    var frag = document.createDocumentFragment();
+    bgs.forEach(function (e) {
+      var node = makeNode(e);
+      if (node) { node.style.zIndex = "-1"; frag.appendChild(node); }
+    });
+    normal.forEach(function (e) {
+      var node = makeNode(e);
+      if (node) frag.appendChild(node);
+    });
+    stage.appendChild(frag);
+
+    // HUD
+    elCur.textContent = (index + 1);
+    elProg.style.width = (((index + 1) / slides.length) * 100) + "%";
+
+    // keep the address bar shareable: index.html#42 -> slide 42
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, "", "#" + (index + 1));
+      }
+    } catch (e) { /* file:// or blocked history API — ignore */ }
+
+    var cap = captionFor(slide, index);
+    elCap.textContent = cap;
+    elCap.classList.toggle("show", !!cap);
+
+    // transition
+    if (dir) {
+      var cls = dir === "next" ? "anim-next" : "anim-prev";
+      stage.classList.remove("anim-next", "anim-prev");
+      void stage.offsetWidth;
+      stage.classList.add(cls);
+      setTimeout(function () { stage.classList.remove(cls); }, 460);
+    }
+
+    preload(index + 1);
+    preload(index - 1);
+  }
+
+  function captionFor(slide, i) {
+    var titles = slide.elements.filter(function (e) {
+      return e.kind === "text" && (e.role === "title" || e.role === "ctrTitle");
+    });
+    if (titles.length) {
+      var txt = titles[0].paragraphs.map(function (p) {
+        return p.runs.map(function (r) { return r.t; }).join("");
+      }).join(" ").replace(/\s+/g, " ").replace(/\*/g, "").trim();
+      if (txt) return txt;
+    }
+    return "";
+  }
+
+  var preloaded = {};
+  function preload(i) {
+    if (i < 0 || i >= slides.length) return;
+    slides[i].elements.forEach(function (e) {
+      if (e.kind === "image" && e.src && !preloaded[e.src]) {
+        preloaded[e.src] = true;
+        var im = new Image(); im.src = e.src;
+      }
+    });
+  }
+
+  /* ------------------------------------------------------- navigation */
+  function go(delta) {
+    var target = index + delta;
+    if (target < 0 || target >= slides.length) return;
+    renderSlide(target, delta > 0 ? "next" : "prev");
+  }
+
+  function updateFocus() {
+    currentImages.forEach(function (n, k) {
+      n.classList.toggle("focused", focusIdx === k);
+      if (focusIdx === k) { n.setAttribute("tabindex", "0"); n.focus(); }
+      else { n.setAttribute("tabindex", "-1"); }
+    });
+    stage.classList.toggle("focus-mode", focusIdx !== null);
+  }
+
+  function clearFocus() {
+    if (focusIdx === null) return false;
+    focusIdx = null; updateFocus(); return true;
+  }
+
+  // Arrow right: next picture, then continue into the next slide
+  function nextPicture() {
+    if (currentImages.length === 0) { go(1); focusFirstImage(); return; }
+    if (focusIdx === null) { focusIdx = 0; updateFocus(); return; }
+    if (focusIdx < currentImages.length - 1) { focusIdx++; updateFocus(); return; }
+    var before = index;
+    go(1);
+    if (index !== before) focusFirstImage();
+  }
+
+  // Arrow left: previous picture, then back into the previous slide
+  function prevPicture() {
+    if (currentImages.length === 0) { go(-1); focusLastImage(); return; }
+    if (focusIdx === null) { focusIdx = currentImages.length - 1; updateFocus(); return; }
+    if (focusIdx > 0) { focusIdx--; updateFocus(); return; }
+    var before = index;
+    go(-1);
+    if (index !== before) focusLastImage();
+  }
+
+  function focusFirstImage() {
+    if (currentImages.length) { focusIdx = 0; updateFocus(); }
+  }
+  function focusLastImage() {
+    if (currentImages.length) { focusIdx = currentImages.length - 1; updateFocus(); }
+  }
+
+  /* ------------------------------------------------------------ input */
+  window.addEventListener("keydown", function (ev) {
+    // lightbox open: delegate picture navigation to lightbox
+    if (lightbox.classList.contains("open")) {
+      if (ev.key === "Escape") { ev.preventDefault(); closeLightbox(); return; }
+      if (ev.key === "Enter")  { ev.preventDefault(); closeLightbox(); return; }
+      if (ev.key === "ArrowRight") { ev.preventDefault(); lbNext(); return; }
+      if (ev.key === "ArrowLeft")  { ev.preventDefault(); lbPrev(); return; }
+      // in lightbox, ArrowDown/Up still switch slides
+      if (ev.key === "ArrowDown" || ev.key === " " || ev.key === "Spacebar") { ev.preventDefault(); closeLightbox(); go(1); return; }
+      if (ev.key === "ArrowUp") { ev.preventDefault(); closeLightbox(); go(-1); return; }
+      return;
+    }
+    if (ev.key === "Escape") { help.classList.add("hide"); clearFocus(); return; }
+    if (help && !help.classList.contains("hide") &&
+        (ev.key === " " || ev.key === "Enter" || ev.key === "ArrowRight" || ev.key === "Spacebar")) {
+      help.classList.add("hide"); ev.preventDefault(); return;
+    }
+    // if a browsable image is currently focused (clicked), Enter/Space opens lightbox
+    if ((ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") && document.activeElement) {
+      var ae = document.activeElement;
+      if (ae.classList && ae.classList.contains("browsable")) {
+        ev.preventDefault();
+        var idx = currentImages.indexOf(ae);
+        if (idx >= 0) openLightbox(idx);
+        return;
+      }
+    }
+    // fallback: if last clicked browsable node exists and Enter/Space pressed, open it
+    if ((ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") && lastBrowsableNode) {
+      if (lastBrowsableNode.classList && lastBrowsableNode.classList.contains("browsable")) {
+        ev.preventDefault();
+        var idx2 = currentImages.indexOf(lastBrowsableNode);
+        if (idx2 >= 0) openLightbox(idx2);
+        return;
+      }
+    }
+    // robust fallback: if any browsable node is document.activeElement, Enter/Space opens it
+    if ((ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") && document.activeElement) {
+      var ae = document.activeElement;
+      if (ae && ae.classList && ae.classList.contains("browsable")) {
+        ev.preventDefault();
+        var idx3 = currentImages.indexOf(ae);
+        if (idx3 >= 0) openLightbox(idx3);
+        return;
+      }
+    }
+    switch (ev.key) {
+      case "ArrowRight": case "PageDown": nextPicture(); ev.preventDefault(); break;
+      case "ArrowLeft":  case "PageUp":   prevPicture(); ev.preventDefault(); break;
+      case "ArrowDown":  case " ":        clearFocus(); go(1);  ev.preventDefault(); break;
+      case "ArrowUp":                     clearFocus(); go(-1); ev.preventDefault(); break;
+      case "Home":                        clearFocus(); renderSlide(0, "prev"); ev.preventDefault(); break;
+      case "End":                         clearFocus(); renderSlide(slides.length - 1, "next"); ev.preventDefault(); break;
+    }
+  });
+
+  viewport.addEventListener("wheel", function (ev) {
+    ev.preventDefault();
+    if (wheelLock) return;
+    if (Math.abs(ev.deltaY) < 4) return;
+    wheelLock = true;
+    clearFocus();
+    go(ev.deltaY > 0 ? 1 : -1);
+    setTimeout(function () { wheelLock = false; }, 620);
+  }, { passive: false });
+
+  // touch swipe
+  var tsY = null, tsX = null;
+  viewport.addEventListener("touchstart", function (ev) {
+    if (ev.touches.length !== 1) return;
+    tsY = ev.touches[0].clientY; tsX = ev.touches[0].clientX;
+  }, { passive: true });
+  viewport.addEventListener("touchend", function (ev) {
+    if (tsY === null) return;
+    var t = ev.changedTouches[0];
+    var dy = tsY - t.clientY, dx = tsX - t.clientX;
+    if (Math.abs(dy) > 45 && Math.abs(dy) > Math.abs(dx)) { clearFocus(); go(dy > 0 ? 1 : -1); }
+    else if (Math.abs(dx) > 55) { (dx < 0 ? nextPicture : prevPicture)(); }
+    tsY = tsX = null;
+  }, { passive: true });
+
+  help.addEventListener("click", function () { help.classList.add("hide"); });
+
+  /* ------------------------------------------------------- scale stage */
+  function resize() {
+    var s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    s *= 0.985;
+    stage.style.setProperty("--s", s);
+    stage.style.transform = "translate(-50%,-50%) scale(" + s + ")";
+  }
+  window.addEventListener("resize", resize);
+
+  /* -------------------------------------------------------------- boot */
+  function deepLinkIndex() {
+    var p = new URLSearchParams(window.location.search);
+    var raw = p.get("slide") || (window.location.hash || "").replace(/^#/, "");
+    var n = parseInt(raw, 10);
+    return (isFinite(n) && n > 0) ? n - 1 : -1;
+  }
+
+  function boot() {
+    fetch("data/presentation.json", { cache: "no-cache" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        DATA = d; slides = d.slides || [];
+        if (!slides.length) throw new Error("empty");
+        initAudio();
+        setMuteButtonLabel();
+        elTot.textContent = slides.length;
+        resize();
+        var deep = deepLinkIndex();
+        if (deep >= 0 && deep < slides.length) {
+          renderSlide(deep);
+          help.classList.add("hide");
+        } else {
+          renderSlide(0);
+          help.classList.remove("hide");
+        }
+      })
+      .catch(function (err) {
+        console.error(err);
+        errorBox.style.display = "flex";
+      });
+  }
+
+  resize();
+  boot();
+})();
+</script>
+</body>
+</html>
