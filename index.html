@@ -723,27 +723,22 @@
     });
     stage.appendChild(frag);
 
-                // Auto-fit: shrink font size for any span that overflows its text box
+                    // Auto-fit: shrink font size for any span that overflows its text box
     stage.querySelectorAll(".el.text:not(.flow) p").forEach(function (pn) {
       var box = pn.closest(".el.text");
       if (box) {
         // Clone the paragraph to measure full text width without wrapping
         var clone = pn.cloneNode(true);
-        clone.style.position = "absolute";
-        clone.style.whiteSpace = "nowrap";
-        clone.style.width = "auto";
-        clone.style.height = "auto";
-        clone.style.visibility = "hidden";
+        clone.style.cssText = "position:absolute;white-space:nowrap;width:auto;height:auto;visibility:hidden;padding:0;margin:0;border:0;";
         box.appendChild(clone);
         var textWidth = clone.scrollWidth;
         var boxW = box.clientWidth;
         box.removeChild(clone);
         if (textWidth > boxW) {
-          var spans = clone.querySelectorAll("span");
-          pn.querySelectorAll("span").forEach(function (sp, i) {
+          var scale = boxW / textWidth;
+          pn.querySelectorAll("span").forEach(function (sp) {
             var fs = parseFloat(window.getComputedStyle(sp).fontSize);
-            var newFs = fs * (boxW / textWidth) * 0.95;
-            sp.style.fontSize = newFs + "px";
+            sp.style.fontSize = (fs * scale * 0.98) + "px";
           });
         }
       }
