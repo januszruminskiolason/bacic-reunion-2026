@@ -15477,7 +15477,22 @@
               "lvl": 0,
               "runs": [
                 {
-                  "t": "5 pokoleń - 83 potomków",
+                  "t": "5 pokoleń",
+                  "sz": null,
+                  "lvl": 0,
+                  "b": false,
+                  "i": false,
+                  "u": null,
+                  "color": null
+                }
+              ]
+            },
+            {
+              "align": null,
+              "lvl": 0,
+              "runs": [
+                {
+                  "t": "83 potomków",
                   "sz": null,
                   "lvl": 0,
                   "b": false,
