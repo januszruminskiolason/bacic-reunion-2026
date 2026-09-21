@@ -723,21 +723,22 @@
     });
     stage.appendChild(frag);
 
-        // Auto-fit: shrink font size for any span that overflows its text box
+            // Auto-fit: shrink font size for any span that overflows its text box
     stage.querySelectorAll(".el.text:not(.flow) span").forEach(function (sp) {
       var box = sp.closest(".el.text");
       if (box) {
-        // Temporarily use nowrap to measure full text width
-        var oldWS = sp.style.whiteSpace;
-        sp.style.whiteSpace = "nowrap";
-        if (sp.scrollWidth > box.clientWidth) {
-          var scale = box.clientWidth / sp.scrollWidth;
-          if (scale < 1) {
-            var fs = parseFloat(sp.style.fontSize);
-            sp.style.fontSize = (fs * scale * 0.95) + "px";
-          }
+        // Measure text width using canvas for accuracy
+        var canvas = document.createElement("canvas");
+        var ctx = canvas.getContext("2d");
+        var style = window.getComputedStyle(sp);
+        ctx.font = style.fontStyle + " " + style.fontWeight + " " + style.fontSize + " " + style.fontFamily;
+        var textWidth = ctx.measureText(sp.textContent).width;
+        var boxW = box.clientWidth - 16; // account for padding
+        if (textWidth > boxW) {
+          var scale = boxW / textWidth;
+          var fs = parseFloat(style.fontSize);
+          sp.style.fontSize = (fs * scale * 0.95) + "px";
         }
-        sp.style.whiteSpace = oldWS;
       }
     });
 
