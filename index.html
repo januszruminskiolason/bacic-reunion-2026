@@ -80,8 +80,8 @@
     scrollbar-width:thin;scrollbar-color:var(--olive) transparent;padding:0;box-sizing:border-box;}
   .el.flow::-webkit-scrollbar{width:8px;}
   .el.flow::-webkit-scrollbar-thumb{background:rgba(152,145,110,.55);border-radius:4px;}
-  .el.flow .prose{width:100%;white-space:normal;line-height:1.28;}
-  .el.flow .prose p{margin:0 0 .55em;width:100%;}
+  .el.flow .prose{width:100%;white-space:normal;line-height:1.4;padding:6px 10px;}
+  .el.flow .prose p{margin:0 0 .7em;width:100%;}
   .el.flow .prose p:last-child{margin-bottom:0;}
 
   .el.text p{margin:0;width:100%;}
@@ -343,6 +343,9 @@
       applyGeom(box, g);
     }
 
+    /* wrap flow paragraphs in .prose so they get inter-paragraph spacing */
+    var prose = isLong ? newEl("div", "prose") : null;
+
     var isTitle = (role === "title" || role === "ctrTitle");
     var defSize = isTitle ? 3200 : null;
     var defColor = elem.defaultColor || (isTitle ? "#A85229" : "#514A40");
@@ -369,6 +372,11 @@
       });
       box.appendChild(pn);
     });
+    if (prose) {
+      // transfer all paragraphs from box to prose
+      while (box.firstChild) prose.appendChild(box.firstChild);
+      box.appendChild(prose);
+    }
     return box;
   }
 
