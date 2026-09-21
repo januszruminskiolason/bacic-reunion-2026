@@ -376,7 +376,7 @@
       // transfer all paragraphs from box to prose
       while (box.firstChild) prose.appendChild(box.firstChild);
       box.appendChild(prose);
-    }
+                }
     return box;
   }
 
@@ -722,6 +722,18 @@
       if (node) frag.appendChild(node);
     });
     stage.appendChild(frag);
+
+    // Auto-fit: shrink font size for any span that overflows its text box
+    stage.querySelectorAll(".el.text:not(.flow) span").forEach(function (sp) {
+      var box = sp.closest(".el.text");
+      if (box && sp.scrollWidth > box.clientWidth) {
+        var scale = box.clientWidth / sp.scrollWidth;
+        if (scale < 1) {
+          var fs = parseFloat(sp.style.fontSize);
+          sp.style.fontSize = (fs * scale * 0.95) + "px";
+        }
+      }
+    });
 
     // HUD
     elCur.textContent = (index + 1);
