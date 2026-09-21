@@ -346,8 +346,15 @@
     /* wrap flow paragraphs in .prose so they get inter-paragraph spacing */
     var prose = isLong ? newEl("div", "prose") : null;
 
-    var isTitle = (role === "title" || role === "ctrTitle");
-    var defSize = isTitle ? 3200 : null;
+        var isTitle = (role === "title" || role === "ctrTitle");
+    // Check if any run contains " & " — if so, use smaller font to prevent line breaks
+    var hasAmpersand = false;
+    elem.paragraphs.forEach(function (p) {
+      p.runs.forEach(function (r) {
+        if (r.t && r.t.includes(" & ")) hasAmpersand = true;
+      });
+    });
+    var defSize = isTitle ? (hasAmpersand ? 2400 : 3200) : null;
     var defColor = elem.defaultColor || (isTitle ? "#A85229" : "#514A40");
     var baseSizes = elem.defaultSize || BODY_SZ;
 
