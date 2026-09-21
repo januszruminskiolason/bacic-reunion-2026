@@ -337,7 +337,7 @@
       box.style.top = pxY(Math.min(g.y, 0)) + "px";
       box.style.width = pxX(1) + "px";
       box.style.height = pxY(Math.max(g.h, 1)) + "px";
-      box.style.maxHeight = pxY(STAGE_H) + "px";
+      box.style.maxHeight = (STAGE_H * (1 - Math.max(0, g.y))) + "px";
       box.style.pointerEvents = "auto";
     } else {
       applyGeom(box, g);
