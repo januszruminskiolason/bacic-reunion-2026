@@ -723,22 +723,25 @@
     });
     stage.appendChild(frag);
 
-                    // Auto-fit: shrink font size for any span that overflows its text box
+                        // Auto-fit: shrink font size for any span that overflows its text box
     stage.querySelectorAll(".el.text:not(.flow) p").forEach(function (pn) {
       var box = pn.closest(".el.text");
       if (box) {
-        // Clone the paragraph to measure full text width without wrapping
+        // Measure text width by creating a temporary inline block
         var clone = pn.cloneNode(true);
-        clone.style.cssText = "position:absolute;white-space:nowrap;width:auto;height:auto;visibility:hidden;padding:0;margin:0;border:0;";
-        box.appendChild(clone);
+        clone.style.cssText = "position:fixed;top:-9999px;left:-9999px;white-space:nowrap;padding:0;margin:0;border:0;display:inline-block;";
+        // Force the clone to match the box's font family
+        var boxStyle = window.getComputedStyle(box);
+        clone.style.fontFamily = boxStyle.fontFamily;
+        document.body.appendChild(clone);
         var textWidth = clone.scrollWidth;
+        document.body.removeChild(clone);
         var boxW = box.clientWidth;
-        box.removeChild(clone);
         if (textWidth > boxW) {
-          var scale = boxW / textWidth;
+          var scale = (boxW / textWidth) * 0.98;
           pn.querySelectorAll("span").forEach(function (sp) {
             var fs = parseFloat(window.getComputedStyle(sp).fontSize);
-            sp.style.fontSize = (fs * scale * 0.98) + "px";
+            sp.style.fontSize = (fs * scale) + "px";
           });
         }
       }
