@@ -151,14 +151,30 @@
     color:var(--cream);font-size:30px;cursor:pointer;line-height:1;opacity:.8;}
   #lightbox .lb-close:hover{opacity:1;color:var(--gold);}
 
-  /* ---------- music mute button (bottom-right, on all pages) ---------- */
-  #mute{position:fixed;right:18px;bottom:18px;z-index:90;
-    width:40px;height:40px;border-radius:999px;border:1px solid rgba(249,247,243,.35);
+  /* ---------- music volume control (bottom-right, on all pages) ---------- */
+  #volwrap{position:fixed;right:18px;bottom:18px;z-index:90;
+    display:flex;align-items:center;gap:0;}
+  #mute{width:40px;height:40px;border-radius:999px;border:1px solid rgba(249,247,243,.35);
     background:rgba(20,18,16,.72);color:var(--cream);font-size:18px;line-height:1;
     cursor:pointer;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 4px 16px rgba(0,0,0,.45);}
+    box-shadow:0 4px 16px rgba(0,0,0,.45);flex:0 0 auto;}
   #mute:hover{background:var(--terracotta);}
   #mute:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+  #volpop{position:absolute;right:0;bottom:calc(100% + 10px);
+    width:40px;height:0;padding:0;overflow:hidden;opacity:0;pointer-events:none;
+    background:rgba(20,18,16,.85);border:1px solid rgba(249,247,243,.25);
+    border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.45);
+    transition:height .22s ease,padding .22s ease,opacity .22s ease;
+    display:flex;align-items:center;justify-content:center;}
+  #volwrap:hover #volpop,#volwrap:focus-within #volpop,#volpop.open{
+    height:138px;padding:12px 0;opacity:1;pointer-events:auto;}
+  #vol{writing-mode:vertical-lr;direction:rtl;width:22px;height:114px;
+    margin:0;padding:0;background:transparent;cursor:pointer;
+    accent-color:var(--gold);}
+  #vol:focus-visible{outline:3px solid var(--gold);outline-offset:-1px;}
+  @media (pointer:coarse){
+    #volpop{height:138px;padding:12px 0;opacity:1;pointer-events:auto;}
+  }
 
   /* ---------- HUD ---------- */
   #hud-caption{
@@ -174,7 +190,7 @@
     z-index:50;transition:width .35s ease;}
 
   #counter{
-    position:fixed;right:18px;bottom:18px;z-index:50;
+    position:fixed;right:70px;bottom:18px;z-index:50;
     font-family:Cambria,Georgia,serif;font-size:14px;letter-spacing:1px;
     color:var(--terracotta);background:var(--cream);
     padding:6px 14px;border-radius:999px;
@@ -228,7 +244,13 @@
   <div id="hud-caption"></div>
   <div id="counter"><b id="cur">1</b> / <span id="tot">–</span></div>
   <div id="brand">Rodzina <span>Bacic</span></div>
-  <button id="mute" type="button" title="Wycisz / włącz muzykę" aria-label="Wycisz / włącz muzykę">🔇</button>
+  <div id="volwrap">
+    <div id="volpop">
+      <input id="vol" type="range" min="0" max="100" step="1" value="80"
+        orient="vertical" aria-label="Głośność muzyki" title="Głośność muzyki" />
+    </div>
+    <button id="mute" type="button" title="Wycisz / włącz muzykę" aria-label="Wycisz / włącz muzykę">🔇</button>
+  </div>
   <audio id="bgmusic" loop preload="auto"></audio>
 
   <div id="lightbox" role="dialog" aria-modal="true" aria-label="Podgląd zdjęcia">
@@ -290,7 +312,9 @@
   var currentImages = [];       // browsable image nodes on current slide
   var wheelLock = false;
   var bgMuted = true;           // global background music mute state
+  var bgVolume = 0.8;           // global volume level 0..1 (background music + videos)
   var bgAudio = null;           // the <audio id="bgmusic"> element
+  var volSlider = null;         // the <input id="vol"> element
   var lastBrowsableNode = null; // last clicked/focused browsable image (for Enter key)
 
   /* ------------------------------------------------------------ utils */
@@ -431,7 +455,8 @@
     box.setAttribute("tabindex", "0");
     box.setAttribute("role", "button");
     box.setAttribute("aria-label", "Wideo — kliknij aby zapisać");
-    // respect global mute state; start muted if bgMuted so autoplay works
+    // respect global mute/volume state; start muted if bgMuted so autoplay works
+    v.volume = bgVolume;
     v.muted = bgMuted;
     if (bgMuted) v.setAttribute("muted", "");
     else         v.removeAttribute("muted");
@@ -519,7 +544,7 @@
       var v = document.createElement("video");
       v.src = src;
       if (poster) v.poster = poster;
-      v.autoplay = true; v.loop = true; v.playsInline = true; v.muted = bgMuted;
+      v.autoplay = true; v.loop = true; v.playsInline = true; v.volume = bgVolume; v.muted = bgMuted;
       v.setAttribute("autoplay", ""); v.setAttribute("loop", "");
       v.setAttribute("playsinline", "");
       if (bgMuted) v.setAttribute("muted", "");
@@ -601,6 +626,12 @@
   }
 
   /* ------------------------------------------------ background music */
+  function applyVolume() {
+    if (bgAudio) { bgAudio.volume = bgVolume; }
+    var vids = stage.querySelectorAll("video");
+    vids.forEach(function (v) { v.volume = bgVolume; });
+  }
+
   function initAudio() {
     bgAudio = document.getElementById("bgmusic");
     if (!bgAudio) return;
@@ -609,6 +640,7 @@
     }
     bgAudio.loop = true;
     bgAudio.preload = "auto";
+    bgAudio.volume = bgVolume;
     bgAudio.muted = bgMuted;
     if (bgMuted) bgAudio.setAttribute("muted", "");
     else         bgAudio.removeAttribute("muted");
@@ -617,16 +649,23 @@
     var p = bgAudio.play(); if (p && p.catch) p.catch(function () {});
   }
 
+  function volumeIcon() {
+    if (bgMuted || bgVolume <= 0) return "🔇";
+    if (bgVolume < 0.5) return "🔉";
+    return "🔊";
+  }
+
   function setMuteButtonLabel() {
     var btn = document.getElementById("mute");
     if (!btn) return;
-    btn.textContent = bgMuted ? "🔇" : "🔊";
-    btn.setAttribute("aria-label", bgMuted ? "Włącz muzykę" : "Wycisz muzykę");
-    btn.setAttribute("title", bgMuted ? "Włącz muzykę" : "Wycisz muzykę");
+    btn.textContent = volumeIcon();
+    var label = bgMuted ? "Włącz muzykę" : ("Wycisz muzykę (głośność " + Math.round(bgVolume * 100) + "%)");
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
   }
 
-  function toggleMute() {
-    bgMuted = !bgMuted;
+  function setMuted(muted) {
+    bgMuted = muted;
     if (bgAudio) {
       bgAudio.muted = bgMuted;
       if (bgMuted) bgAudio.setAttribute("muted", "");
@@ -634,29 +673,81 @@
       if (!bgMuted) { var p = bgAudio.play(); if (p && p.catch) p.catch(function () {}); }
     }
     setMuteButtonLabel();
-    // sync all videos currently on screen
-    var vids = stage.querySelectorAll("video");
-    vids.forEach(function (v) {
-      v.muted = bgMuted;
-      if (bgMuted) v.setAttribute("muted", "");
-      else         v.removeAttribute("muted");
-    });
+    syncAllVideos();
+  }
+
+  function setVolume(level, opts) {
+    opts = opts || {};
+    bgVolume = Math.max(0, Math.min(1, level));
+    if (volSlider && document.activeElement !== volSlider) {
+      volSlider.value = String(Math.round(bgVolume * 100));
+    } else if (volSlider && opts.fromSlider) {
+      volSlider.value = String(Math.round(bgVolume * 100));
+    }
+    applyVolume();
+    // dragging the slider up from 0 unmutes; dragging to 0 mutes
+    if (opts.fromSlider) {
+      if (bgVolume <= 0 && !bgMuted) setMuted(true);
+      else if (bgVolume > 0 && bgMuted) setMuted(false);
+      else setMuteButtonLabel();
+    } else {
+      setMuteButtonLabel();
+    }
+  }
+
+  function toggleMute() {
+    // unmuting from 0 restores a sensible default level
+    if (bgMuted && bgVolume <= 0) setVolume(0.8);
+    setMuted(!bgMuted);
   }
 
   function syncAllVideos() {
     var vids = stage.querySelectorAll("video");
     vids.forEach(function (v) {
+      v.volume = bgVolume;
       v.muted = bgMuted;
       if (bgMuted) v.setAttribute("muted", "");
       else         v.removeAttribute("muted");
     });
   }
 
-  // mute button
+  // mute button + volume slider
   (function () {
     var btn = document.getElementById("mute");
     if (btn) {
       btn.addEventListener("click", function (ev) { ev.stopPropagation(); toggleMute(); });
+    }
+    volSlider = document.getElementById("vol");
+    if (volSlider) {
+      volSlider.value = String(Math.round(bgVolume * 100));
+      volSlider.addEventListener("input", function (ev) {
+        ev.stopPropagation();
+        setVolume(parseFloat(volSlider.value) / 100, { fromSlider: true });
+      });
+      volSlider.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      // keep popup open while dragging on touch devices
+      volSlider.addEventListener("pointerdown", function () {
+        var pop = document.getElementById("volpop");
+        if (pop) pop.classList.add("open");
+      });
+      volSlider.addEventListener("pointerup", function () {
+        var pop = document.getElementById("volpop");
+        if (pop) setTimeout(function () { pop.classList.remove("open"); }, 600);
+      });
+    }
+    // mouse wheel over the button adjusts volume without opening the popup
+    var wrap = document.getElementById("volwrap");
+    if (wrap) {
+      wrap.addEventListener("wheel", function (ev) {
+        ev.preventDefault();
+        var step = ev.deltaY < 0 ? 0.05 : -0.05;
+        setVolume(bgVolume + step);
+        var pop = document.getElementById("volpop");
+        if (pop) {
+          pop.classList.add("open");
+          setTimeout(function () { pop.classList.remove("open"); }, 800);
+        }
+      }, { passive: false });
     }
   })();
 
@@ -667,12 +758,8 @@
       return;
     }
     if (bgAudio) {
-      bgMuted = false;
-      bgAudio.muted = false;
-      bgAudio.removeAttribute("muted");
-      var p = bgAudio.play(); if (p && p.catch) p.catch(function () {});
-      setMuteButtonLabel();
-      syncAllVideos();
+      setVolume(bgVolume);
+      setMuted(false);
     }
   }
 
