@@ -132,7 +132,7 @@
 
   /* ---------- family tree (last slide): fullscreen + click/wheel zoom + hover pan ---------- */
   .el.treewrap{position:absolute;left:0;top:0;width:1280px;height:720px;overflow:hidden;
-    background:#F9F7F3;cursor:zoom-in;z-index:1000;}
+    background:#F9F7F3;cursor:zoom-in;z-index:1000;touch-action:none;}
   .el.treewrap.zoomed{cursor:zoom-out;}
   .el.treewrap img{position:absolute;display:block;max-width:none;max-height:none;
     user-select:none;-webkit-user-drag:none;}
@@ -531,7 +531,8 @@
     wrap.appendChild(hint);
 
     var st = { wrap: wrap, img: img, hint: hint, zoom: 1,
-               natW: 0, natH: 0, base: 1, viewW: STAGE_W, viewH: STAGE_H };
+               natW: 0, natH: 0, base: 1, viewW: STAGE_W, viewH: STAGE_H,
+               coarse: (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) };
     treeState = st;
 
     function fit() {
@@ -558,8 +559,12 @@
       img.style.top = ((viewH - h) / 2 + (st.panY || 0)) + "px";
       wrap.classList.toggle("zoomed", st.zoom > 1);
       st.hint.innerHTML = st.zoom <= 1
-        ? "Kliknij obraz, aby powiększyć do <b>150%</b> · kółko myszy: zoom 100–500%"
-        : "Zoom: <b>" + Math.round(st.zoom * 100) + "%</b> · najedź myszą, aby przesuwać · kliknij, aby wrócić";
+        ? (st.coarse
+          ? "Dotknij, aby powiększyć do <b>150%</b> · dwoma palcami: zoom 100–500%"
+          : "Kliknij obraz, aby powiększyć do <b>150%</b> · kółko myszy: zoom 100–500%")
+        : (st.coarse
+          ? "Zoom: <b>" + Math.round(st.zoom * 100) + "%</b> · przeciągnij palcem, aby przesuwać · dotknij, aby wrócić"
+          : "Zoom: <b>" + Math.round(st.zoom * 100) + "%</b> · najedź myszą, aby przesuwać · kliknij, aby wrócić");
     }
 
     function setZoom(z, cx, cy) {
@@ -591,6 +596,8 @@
 
     wrap.addEventListener("click", function (ev) {
       ev.stopPropagation();
+      // ignore the emulated click that follows a touch tap/pinch (tap logic handles it)
+      if (st.suppressClickUntil && Date.now() < st.suppressClickUntil) return;
       // click toggles: fullscreen -> 150%, zoomed -> back to fullscreen
       if (st.zoom <= 1) setZoom(1.5, ev.clientX, ev.clientY);
       else { st.zoom = 1; st.panX = 0; st.panY = 0; layout(st.top, st.viewW, st.viewH); }
@@ -614,27 +621,145 @@
       st.panY = -fy * 2 * maxY;
       layout(st.top, st.viewW, st.viewH);
     });
-    // touch: one-finger drag pans the zoomed image (and blocks slide swipe)
+    // touch: one-finger drag pans the zoomed image, two-finger pinch zooms
+    // 100%..500% (50% steps on release). Gestures never switch slides.
     var dragX = 0, dragY = 0, dragging = false;
-    wrap.addEventListener("touchstart", function (ev) {
+    var pinchD0 = 0, pinchZoom0 = 1, pinchCX = 0, pinchCY = 0, pinching = false;
+    var tapTimer = null, tapX = 0, tapY = 0, tapCount = 0;
+    var touchMoved = false, touchStartX = 0, touchStartY = 0;
+
+    function touchDist(t) {
+      var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    function touchMid(t) {
+      return { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 };
+    }
+    function killTap() {
+      if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
+      tapCount = 0; st.tapCount = 0;
+    }
+    function doSingleTap(x, y) {
+      // same toggle as desktop click: fullscreen -> 150%, zoomed -> fullscreen
+      if (st.zoom <= 1) setZoom(1.5, x, y);
+      else { st.zoom = 1; st.panX = 0; st.panY = 0; layout(st.top, st.viewW, st.viewH); }
+    }
+    function stopTouch(ev) {
       ev.stopPropagation();
-      if (ev.touches.length === 1 && st.zoom > 1) {
-        dragging = true; dragX = ev.touches[0].clientX; dragY = ev.touches[0].clientY;
+      if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    }
+    wrap.addEventListener("touchstart", function (ev) {
+      stopTouch(ev);
+      touchMoved = false;
+      touchStartX = ev.touches[0].clientX; touchStartY = ev.touches[0].clientY;
+      if (ev.touches.length === 2) {
+        // start pinch: block swipe + pending single-tap toggle.
+        // Also cancel a second-tap wait: two fingers is a pinch, not a double tap.
+        if (ev.cancelable) ev.preventDefault();
+        killTap(); st.tapCount = 0;
+        dragging = false; pinching = true; st.pinching = true;
+        pinchD0 = Math.max(1, touchDist(ev.touches));
+        pinchZoom0 = st.zoom;
+        var m = touchMid(ev.touches);
+        pinchCX = m.x; pinchCY = m.y;
+      } else if (ev.touches.length === 1) {
+        // any one-finger touch on the tree belongs to the viewer (tap or pan),
+        // never to the global slide-swipe handler
+        st.touching = true;
+        if (st.zoom > 1) {
+          dragging = true; dragX = ev.touches[0].clientX; dragY = ev.touches[0].clientY;
+        }
       }
-    }, { passive: true });
+    }, { passive: false });
     wrap.addEventListener("touchmove", function (ev) {
-      if (!dragging || st.zoom <= 1) return;
-      ev.preventDefault(); ev.stopPropagation();
-      var r = wrap.getBoundingClientRect();
-      var kx = st.viewW / Math.max(1, r.width), ky = st.viewH / Math.max(1, r.height);
+      stopTouch(ev);
+      var dx0 = ev.touches[0].clientX - touchStartX;
+      var dy0 = ev.touches[0].clientY - touchStartY;
+      if (Math.abs(dx0) > 10 || Math.abs(dy0) > 10) touchMoved = true;
+      if (pinching && ev.touches.length === 2) {
+        if (ev.cancelable) ev.preventDefault();
+        // live pinch: zoom continuously, snap to 50% steps on release
+        var d = Math.max(1, touchDist(ev.touches));
+        var m = touchMid(ev.touches);
+        var zRaw = Math.max(1, Math.min(5, pinchZoom0 * d / pinchD0));
+        var r = wrap.getBoundingClientRect();
+        var sx = (m.x - r.left) * (st.viewW / r.width);
+        var sy = (m.y - r.top) * (st.viewH / r.height);
+        if (zRaw <= 1.001) { st.zoom = 1; st.panX = 0; st.panY = 0; }
+        else {
+          var k = zRaw / st.zoom;
+          st.zoom = zRaw;
+          st.panX = (st.panX || 0) * k - (sx - st.viewW / 2) * (k - 1);
+          st.panY = (st.panY || 0) * k - (sy - st.viewH / 2) * (k - 1);
+        }
+        pinchCX = m.x; pinchCY = m.y;
+        layout(st.top, st.viewW, st.viewH);
+        return;
+      }
+      if (!dragging || st.zoom <= 1) {
+        // swallow the move so the page/slide swipe never sees tree gestures
+        if (ev.cancelable) ev.preventDefault();
+        return;
+      }
+      if (ev.cancelable) ev.preventDefault();
+      var r2 = wrap.getBoundingClientRect();
+      var kx = st.viewW / Math.max(1, r2.width), ky = st.viewH / Math.max(1, r2.height);
       st.panX = (st.panX || 0) + (ev.touches[0].clientX - dragX) * kx;
       st.panY = (st.panY || 0) + (ev.touches[0].clientY - dragY) * ky;
       dragX = ev.touches[0].clientX; dragY = ev.touches[0].clientY;
       layout(st.top, st.viewW, st.viewH);
     }, { passive: false });
     wrap.addEventListener("touchend", function (ev) {
-      ev.stopPropagation();
+      stopTouch(ev);
+      st.touching = ev.touches.length > 0;
+      if (pinching) {
+        if (ev.touches.length < 2) {
+          pinching = false; st.pinching = false;
+          // snap live pinch zoom to 50% steps, keep pinch midpoint stable
+          var snapped = Math.max(1, Math.min(5, Math.round(st.zoom * 2) / 2));
+          var keepZ = st.zoom;
+          st.zoom = snapped;
+          if (snapped <= 1) { st.panX = 0; st.panY = 0; }
+          else if (keepZ > 1.001) {
+            var r = wrap.getBoundingClientRect();
+            var sx = (pinchCX - r.left) * (st.viewW / r.width);
+            var sy = (pinchCY - r.top) * (st.viewH / r.height);
+            var k = snapped / keepZ;
+            st.panX = (st.panX || 0) * k - (sx - st.viewW / 2) * (k - 1);
+            st.panY = (st.panY || 0) * k - (sy - st.viewH / 2) * (k - 1);
+          }
+          layout(st.top, st.viewW, st.viewH);
+          // swallow the click emulation after a two-finger gesture
+          killTap();
+          st.suppressClickUntil = Date.now() + 600;
+          dragging = false;
+        }
+        return;
+      }
       dragging = false;
+      // one-finger tap (not a drag, single touch): single tap toggles zoom,
+      // double tap zooms in further (+50% each, up to 500%).
+      // The emulated mouse click is suppressed; the tap timer performs the toggle.
+      if (ev.touches.length === 0 && !touchMoved &&
+          !(st.suppressClickUntil && Date.now() < st.suppressClickUntil)) {
+        var t = ev.changedTouches[0];
+        st.suppressClickUntil = Date.now() + 600;
+        if (!st.tapCount) {
+          st.tapCount = 1; tapCount = 1; tapX = t.clientX; tapY = t.clientY;
+          tapTimer = setTimeout(function () {
+            tapTimer = null; tapCount = 0; st.tapCount = 0;
+            doSingleTap(tapX, tapY);
+          }, 280);
+        } else {
+          killTap();
+          var stepZ = st.zoom <= 1 ? 1.5 : Math.min(5, Math.round((st.zoom + 0.5) * 2) / 2);
+          setZoom(stepZ, t.clientX, t.clientY);
+        }
+      }
+    }, { passive: true });
+    wrap.addEventListener("touchcancel", function (ev) {
+      stopTouch(ev);
+      dragging = false; pinching = false; st.pinching = false; st.touching = false; killTap();
     }, { passive: true });
     wrap.addEventListener("keydown", function (ev) {
       if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
@@ -1193,10 +1318,12 @@
     setTimeout(function () { wheelLock = false; }, 620);
   }, { passive: false });
 
-  // touch swipe
+  // touch swipe (ignored when the gesture started on the zoomed family tree —
+  // tree touches are stopped at the treewrap and never reach the viewport)
   var tsY = null, tsX = null;
   viewport.addEventListener("touchstart", function (ev) {
     if (ev.touches.length !== 1) return;
+    if (treeState && treeState.touching) return;
     tsY = ev.touches[0].clientY; tsX = ev.touches[0].clientX;
   }, { passive: true });
   viewport.addEventListener("touchend", function (ev) {
