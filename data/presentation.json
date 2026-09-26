@@ -31,7 +31,7 @@
   },
   "masterBackground": "assets/media/image1.png",
   "audio": "assets/media/media1.mp3",
-  "slideCount": 107,
+  "slideCount": 108,
   "slides": [
     {
       "index": 1,
@@ -15657,6 +15657,48 @@
             "flipH": false,
             "flipV": false
           }
+        }
+      ]
+    },
+    {
+      "index": 108,
+      "file": "tree",
+      "kind": "tree",
+      "background": "assets/media/image1.png",
+      "elements": [
+        {
+          "kind": "text",
+          "role": "title",
+          "anchor": "t",
+          "geom": {
+            "x": 0.05,
+            "y": 0.02,
+            "w": 0.9,
+            "h": 0.1,
+            "rot": 0.0,
+            "flipH": false,
+            "flipV": false
+          },
+          "paragraphs": [
+            {
+              "align": "center",
+              "lvl": 0,
+              "runs": [
+                {
+                  "t": "Drzewo Rodziny Bacic",
+                  "sz": 3200,
+                  "lvl": 0,
+                  "b": true
+                }
+              ]
+            }
+          ],
+          "defaultColor": "#A85229",
+          "defaultSize": 3200
+        },
+        {
+          "kind": "tree",
+          "src": "assets/media/drzewo-rodziny.jpg"
         }
       ]
     }

@@ -130,6 +130,18 @@
     box-shadow:0 0 0 4px var(--terracotta),0 14px 44px rgba(0,0,0,.55);
   }
 
+  /* ---------- family tree (last slide): fullscreen + click/wheel zoom + hover pan ---------- */
+  .el.treewrap{position:absolute;left:0;top:0;width:1280px;height:720px;overflow:hidden;
+    background:#F9F7F3;cursor:zoom-in;z-index:1000;}
+  .el.treewrap.zoomed{cursor:zoom-out;}
+  .el.treewrap img{position:absolute;display:block;max-width:none;max-height:none;
+    user-select:none;-webkit-user-drag:none;}
+  .tree-hint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);
+    background:rgba(20,18,16,.72);color:#F9F7F3;font-size:14px;letter-spacing:.5px;
+    padding:7px 16px;border-radius:999px;pointer-events:none;white-space:nowrap;
+    box-shadow:0 4px 16px rgba(0,0,0,.4);z-index:5;}
+  .tree-hint b{color:#C9A645;font-weight:700;}
+
   /* ---------- lightbox: click / Enter on a picture ---------- */
   #lightbox{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;
     background:rgba(15,13,11,.92);padding:4vmin;cursor:zoom-out;}
@@ -497,6 +509,151 @@
     return img;
   }
 
+  /* --------------------------------- family tree: fullscreen pan & zoom viewer */
+  var treeState = null;   // {wrap, img, zoom, natW, natH, base, viewW, viewH} or null
+
+  function isTreeSlide(slide) {
+    return !!slide && (slide.kind === "tree" ||
+      (slide.elements || []).some(function (e) { return e.kind === "tree"; }));
+  }
+
+  function buildTree(elem, titleEl) {
+    var wrap = newEl("div", "el treewrap");
+    wrap.setAttribute("tabindex", "0");
+    wrap.setAttribute("role", "button");
+    wrap.setAttribute("aria-label", "Drzewo rodziny — kliknij aby powiększyć, kółko myszy zoomuje");
+    var img = newEl("img");
+    img.src = elem.src;
+    img.alt = "Drzewo Rodziny Bacic";
+    img.draggable = false;
+    wrap.appendChild(img);
+    var hint = newEl("div", "tree-hint");
+    wrap.appendChild(hint);
+
+    var st = { wrap: wrap, img: img, hint: hint, zoom: 1,
+               natW: 0, natH: 0, base: 1, viewW: STAGE_W, viewH: STAGE_H };
+    treeState = st;
+
+    function fit() {
+      // fullscreen: contain whole image inside the free area below the title
+      var top = titleEl ? (titleEl.offsetTop + titleEl.offsetHeight) : 0;
+      var viewH = STAGE_H - top, viewW = STAGE_W;
+      st.viewW = viewW; st.viewH = viewH; st.top = top;
+      wrap.style.top = top + "px";
+      wrap.style.height = viewH + "px";
+      if (!st.natW || !st.natH) return;
+      st.base = Math.min(viewW / st.natW, viewH / st.natH);
+      layout(top, viewW, viewH);
+    }
+
+    function layout(top, viewW, viewH) {
+      var w = st.natW * st.base * st.zoom, h = st.natH * st.base * st.zoom;
+      img.style.width = w + "px";
+      img.style.height = h + "px";
+      // clamp pan offsets; image follows the mouse when zoomed
+      var maxX = Math.max(0, (w - viewW) / 2), maxY = Math.max(0, (h - viewH) / 2);
+      st.panX = Math.max(-maxX, Math.min(maxX, st.panX || 0));
+      st.panY = Math.max(-maxY, Math.min(maxY, st.panY || 0));
+      img.style.left = ((viewW - w) / 2 + (st.panX || 0)) + "px";
+      img.style.top = ((viewH - h) / 2 + (st.panY || 0)) + "px";
+      wrap.classList.toggle("zoomed", st.zoom > 1);
+      st.hint.innerHTML = st.zoom <= 1
+        ? "Kliknij obraz, aby powiększyć do <b>150%</b> · kółko myszy: zoom 100–500%"
+        : "Zoom: <b>" + Math.round(st.zoom * 100) + "%</b> · najedź myszą, aby przesuwać · kliknij, aby wrócić";
+    }
+
+    function setZoom(z, cx, cy) {
+      z = Math.max(1, Math.min(5, Math.round(z * 2) / 2)); // 50% steps, 100%..500%
+      if (z === st.zoom) { layout(st.top, st.viewW, st.viewH); return; }
+      if (z <= 1) { st.zoom = 1; st.panX = 0; st.panY = 0; }
+      else {
+        // keep the point under the cursor stable while zooming
+        // (convert mouse position from screen px to stage px first)
+        var r = wrap.getBoundingClientRect();
+        var sx = (cx !== undefined ? (cx - r.left) * (st.viewW / r.width) : st.viewW / 2);
+        var sy = (cy !== undefined ? (cy - r.top) * (st.viewH / r.height) : st.viewH / 2);
+        var k = z / st.zoom;
+        st.zoom = z;
+        st.panX = (st.panX || 0) * k - (sx - st.viewW / 2) * (k - 1);
+        st.panY = (st.panY || 0) * k - (sy - st.viewH / 2) * (k - 1);
+      }
+      layout(st.top, st.viewW, st.viewH);
+      wrap.focus();
+    }
+
+    img.addEventListener("load", function () {
+      st.natW = img.naturalWidth; st.natH = img.naturalHeight;
+      fit();
+    });
+    if (img.complete && img.naturalWidth) {
+      st.natW = img.naturalWidth; st.natH = img.naturalHeight;
+    }
+
+    wrap.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      // click toggles: fullscreen -> 150%, zoomed -> back to fullscreen
+      if (st.zoom <= 1) setZoom(1.5, ev.clientX, ev.clientY);
+      else { st.zoom = 1; st.panX = 0; st.panY = 0; layout(st.top, st.viewW, st.viewH); }
+    });
+    wrap.addEventListener("wheel", function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var step = ev.deltaY < 0 ? 0.5 : -0.5;
+      setZoom(st.zoom + step, ev.clientX, ev.clientY);
+    }, { passive: false });
+    wrap.addEventListener("mousemove", function (ev) {
+      if (st.zoom <= 1) return;
+      // mouse position steers which part of the zoomed image is visible:
+      // the visible window follows the cursor (image shifts opposite).
+      var r = wrap.getBoundingClientRect();
+      var fx = (ev.clientX - r.left) / r.width - 0.5;   // -0.5..0.5
+      var fy = (ev.clientY - r.top) / r.height - 0.5;
+      var w = st.natW * st.base * st.zoom, h = st.natH * st.base * st.zoom;
+      var maxX = Math.max(0, (w - st.viewW) / 2);
+      var maxY = Math.max(0, (h - st.viewH) / 2);
+      st.panX = -fx * 2 * maxX;
+      st.panY = -fy * 2 * maxY;
+      layout(st.top, st.viewW, st.viewH);
+    });
+    // touch: one-finger drag pans the zoomed image (and blocks slide swipe)
+    var dragX = 0, dragY = 0, dragging = false;
+    wrap.addEventListener("touchstart", function (ev) {
+      ev.stopPropagation();
+      if (ev.touches.length === 1 && st.zoom > 1) {
+        dragging = true; dragX = ev.touches[0].clientX; dragY = ev.touches[0].clientY;
+      }
+    }, { passive: true });
+    wrap.addEventListener("touchmove", function (ev) {
+      if (!dragging || st.zoom <= 1) return;
+      ev.preventDefault(); ev.stopPropagation();
+      var r = wrap.getBoundingClientRect();
+      var kx = st.viewW / Math.max(1, r.width), ky = st.viewH / Math.max(1, r.height);
+      st.panX = (st.panX || 0) + (ev.touches[0].clientX - dragX) * kx;
+      st.panY = (st.panY || 0) + (ev.touches[0].clientY - dragY) * ky;
+      dragX = ev.touches[0].clientX; dragY = ev.touches[0].clientY;
+      layout(st.top, st.viewW, st.viewH);
+    }, { passive: false });
+    wrap.addEventListener("touchend", function (ev) {
+      ev.stopPropagation();
+      dragging = false;
+    }, { passive: true });
+    wrap.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " " || ev.key === "Spacebar") {
+        ev.preventDefault(); ev.stopPropagation();
+        if (st.zoom <= 1) setZoom(1.5);
+        else { st.zoom = 1; st.panX = 0; st.panY = 0; layout(st.top, st.viewW, st.viewH); }
+      } else if (ev.key === "Escape") {
+        if (st.zoom > 1) {
+          ev.preventDefault(); ev.stopPropagation();
+          st.zoom = 1; st.panX = 0; st.panY = 0; layout(st.top, st.viewW, st.viewH);
+        }
+      }
+    });
+
+    requestAnimationFrame(fit);
+    setTimeout(fit, 60);
+    return wrap;
+  }
+
   /* ------------------------------------------------ lightbox: picture preview */
   var lightbox       = document.getElementById("lightbox");
   var lbMedia        = document.getElementById("lb-media");
@@ -773,6 +930,7 @@
     focusIdx = null;
     currentImages = [];
     lastBrowsableNode = null;
+    treeState = null;
 
     // remove previous content (keep chrome bar)
     var keep = stage.querySelector(".chrome-bar");
@@ -786,6 +944,29 @@
     // otherwise the inherited slide-master background texture.
     var bgSrc = slide.background || (DATA && DATA.masterBackground) || null;
     stage.style.backgroundImage = bgSrc ? "url('" + bgSrc + "')" : "none";
+
+    // Family tree slide: title on top + fullscreen zoomable image below.
+    if (isTreeSlide(slide)) {
+      var titleEl = null, treeElem = null;
+      slide.elements.forEach(function (e) {
+        if (e.kind === "tree") treeElem = e;
+      });
+      slide.elements.forEach(function (e) {
+        if (e.kind === "text") {
+          var t = buildText(e);
+          stage.appendChild(t);
+          if (!titleEl && (e.role === "title" || e.role === "ctrTitle")) titleEl = t;
+        }
+      });
+      if (!titleEl) {
+        var allT = stage.querySelectorAll(".el.text");
+        if (allT.length) titleEl = allT[0];
+      }
+      if (treeElem) stage.appendChild(buildTree(treeElem, titleEl));
+      finishSlide(slide, dir);
+      preload(index - 1);
+      return;
+    }
 
     // Keep PowerPoint document order (= z-order) but paint full-bleed photos
     // first, so they act as the slide backdrop instead of hiding the content
@@ -841,6 +1022,10 @@
       }
     });
 
+    finishSlide(slide, dir);
+  }
+
+  function finishSlide(slide, dir) {
     // HUD
     elCur.textContent = (index + 1);
     elProg.style.width = (((index + 1) / slides.length) * 100) + "%";
@@ -886,7 +1071,7 @@
   function preload(i) {
     if (i < 0 || i >= slides.length) return;
     slides[i].elements.forEach(function (e) {
-      if (e.kind === "image" && e.src && !preloaded[e.src]) {
+      if ((e.kind === "image" || e.kind === "tree") && e.src && !preloaded[e.src]) {
         preloaded[e.src] = true;
         var im = new Image(); im.src = e.src;
       }
