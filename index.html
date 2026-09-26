@@ -243,6 +243,42 @@
   #error{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     background:#141210;color:var(--cream);font-size:15px;line-height:1.7;padding:40px;text-align:center;}
   #error code{color:var(--gold);}
+
+  /* ---------- slide thumbnails strip ---------- */
+  #thumbs{position:fixed;z-index:120;display:flex;gap:10px;padding:10px;
+    background:rgba(20,18,16,.72);border:1px solid rgba(201,166,69,.25);
+    box-shadow:0 8px 30px rgba(0,0,0,.5);box-sizing:border-box;
+    scrollbar-width:thin;scrollbar-color:var(--gold) rgba(255,255,255,.08);}
+  #thumbs::-webkit-scrollbar{height:8px;width:8px;}
+  #thumbs::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px;}
+  #thumbs::-webkit-scrollbar-track{background:rgba(255,255,255,.08);border-radius:4px;}
+  /* landscape / wide screens: vertical strip on the right */
+  @media (min-aspect-ratio: 1/1){
+    #thumbs{right:10px;top:50%;transform:translateY(-50%);flex-direction:column;
+      max-height:92vh;max-width:172px;overflow-y:auto;overflow-x:hidden;border-radius:14px;}
+    #thumbs .thumb{width:140px;height:79px;}
+  }
+  /* portrait / tall screens (incl. phones): horizontal strip on top */
+  @media (max-aspect-ratio: 1/1){
+    #thumbs{left:50%;top:8px;transform:translateX(-50%);flex-direction:row;
+      max-width:96vw;overflow-x:auto;overflow-y:hidden;border-radius:14px;}
+    #thumbs .thumb{width:128px;height:72px;flex:0 0 auto;}
+    /* keep mute/volume reachable: dock them below the top strip */
+    #volwrap{right:12px;bottom:auto;top:112px;}
+  }
+  /* short landscape phones: slimmer strip + smaller thumbs */
+  @media (min-aspect-ratio: 1/1) and (max-height: 500px){
+    #thumbs{max-width:118px;padding:6px;gap:6px;}
+    #thumbs .thumb{width:96px;height:54px;}
+  }
+  #thumbs .thumb{position:relative;flex:0 0 auto;border-radius:8px;overflow:hidden;
+    border:2px solid transparent;background:#000;cursor:pointer;padding:0;}
+  #thumbs .thumb canvas{display:block;width:100%;height:100%;}
+  #thumbs .thumb .num{position:absolute;left:4px;bottom:2px;font-size:10px;font-weight:700;
+    color:#fff;text-shadow:0 1px 3px #000;background:rgba(0,0,0,.45);
+    padding:0 5px;border-radius:6px;pointer-events:none;}
+  #thumbs .thumb.active{border-color:var(--gold);box-shadow:0 0 12px rgba(201,166,69,.8);}
+  #thumbs .thumb:focus-visible{outline:3px solid var(--gold);outline-offset:1px;}
 </style>
 </head>
 <body>
@@ -254,6 +290,7 @@
   </div>
 
   <div id="hud-caption"></div>
+  <div id="thumbs" role="navigation" aria-label="Miniatury slajdów"></div>
   <div id="counter"><b id="cur">1</b> / <span id="tot">–</span></div>
   <div id="brand">Rodzina <span>Bacic</span></div>
   <div id="volwrap">
@@ -316,6 +353,7 @@
   var elTot    = document.getElementById("tot");
   var elProg   = document.getElementById("progress");
   var elCap    = document.getElementById("hud-caption");
+  var thumbsBox = document.getElementById("thumbs");
 
   var DATA = null;
   var slides = [];
@@ -1177,6 +1215,8 @@
 
     preload(index + 1);
     preload(index - 1);
+    thumbsMark(index);
+    thumbsEnsureVisible(index);
   }
 
   function captionFor(slide, i) {
@@ -1202,6 +1242,215 @@
       }
     });
   }
+
+  /* --------------------------------- thumbnails strip: miniatures of all slides
+     - vertical strip on the right on wide/landscape screens,
+       horizontal strip on top on portrait/mobile screens
+     - mobile: finger drag scrolls natively; tap a miniature jumps to that slide
+     - PC: mouse wheel over the strip scrolls it AND jumps to the miniature
+       currently under the pointer (debounced) */
+  var thumbBtns = [], thumbsBuilt = false, thumbHoverTimer = null;
+  var THUMB_W = 140, THUMB_H = 79;
+
+  function thumbsIsVertical() {
+    try { return window.matchMedia("(min-aspect-ratio: 1/1)").matches; }
+    catch (e) { return window.innerWidth >= window.innerHeight; }
+  }
+
+  function paintThumb(slide, canvas) {
+    var ctx = canvas.getContext("2d");
+    canvas.width = THUMB_W; canvas.height = THUMB_H;
+    ctx.fillStyle = "#F9F7F3"; ctx.fillRect(0, 0, THUMB_W, THUMB_H);
+    var kx = THUMB_W / STAGE_W, ky = THUMB_H / STAGE_H;
+    var bgSrc = slide.background || (DATA && DATA.masterBackground) || null;
+    if (bgSrc) {
+      var bgImg = new Image();
+      bgImg.onload = function () {
+        if (!canvas.isConnected) return;
+        ctx.drawImage(bgImg, 0, 0, THUMB_W, THUMB_H);
+        drawSlideLayers(slide, ctx, kx, ky);
+        drawThumbChrome(ctx);
+      };
+      bgImg.onerror = function () {
+        if (!canvas.isConnected) return;
+        drawSlideLayers(slide, ctx, kx, ky);
+        drawThumbChrome(ctx);
+      };
+      bgImg.src = bgSrc;
+    } else {
+      drawSlideLayers(slide, ctx, kx, ky);
+      drawThumbChrome(ctx);
+    }
+  }
+
+  function drawThumbChrome(ctx) {
+    ctx.fillStyle = "rgba(168,82,41,.9)";
+    ctx.fillRect(0, 0, THUMB_W, Math.max(3, THUMB_H * 0.008));
+  }
+
+  // draw a simplified slide preview: images as boxes, text as title bar + lines
+  function drawSlideLayers(slide, ctx, kx, ky) {
+    (slide.elements || []).forEach(function (e) {
+      if (e.kind === "image") {
+        var g = e.geom;
+        ctx.fillStyle = "#8a7f70";
+        ctx.fillRect(g.x * THUMB_W, g.y * THUMB_H, g.w * THUMB_W, g.h * THUMB_H);
+        if (e.src) {
+          var im = new Image();
+          im.onload = function () {
+            if (!ctx.canvas.isConnected) return;
+            try {
+              var dx = g.x * THUMB_W, dy = g.y * THUMB_H,
+                  dw = g.w * THUMB_W, dh = g.h * THUMB_H;
+              ctx.save();
+              ctx.beginPath(); ctx.rect(dx, dy, dw, dh); ctx.clip();
+              if (e.crop) {
+                var c = e.crop;
+                var sw = im.naturalWidth * (1 - c.l - c.r);
+                var sh = im.naturalHeight * (1 - c.t - c.b);
+                ctx.drawImage(im, im.naturalWidth * c.l, im.naturalHeight * c.t, sw, sh, dx, dy, dw, dh);
+              } else {
+                ctx.drawImage(im, dx, dy, dw, dh);
+              }
+              ctx.restore();
+            } catch (err) { /* ignore */ }
+          };
+          im.src = e.src;
+        }
+      } else if (e.kind === "tree") {
+        ctx.fillStyle = "#ddd5c6";
+        ctx.fillRect(0, THUMB_H * 0.1, THUMB_W, THUMB_H * 0.9);
+        if (e.src) {
+          var tm = new Image();
+          tm.onload = function () {
+            if (!ctx.canvas.isConnected) return;
+            try { ctx.drawImage(tm, 0, THUMB_H * 0.1, THUMB_W, THUMB_H * 0.9); }
+            catch (err) { /* ignore */ }
+          };
+          tm.src = e.src;
+        }
+      } else if (e.kind === "text") {
+        var tg = e.geom;
+        var isTitle = (e.role === "title" || e.role === "ctrTitle");
+        var bx = tg.x * THUMB_W, by = tg.y * THUMB_H,
+            bw = Math.max(4, tg.w * THUMB_W), bh = tg.h * THUMB_H;
+        if (isTitle) {
+          ctx.fillStyle = "#A85229";
+          ctx.fillRect(bx, by, bw, Math.max(3, Math.min(bh, 9)));
+        } else {
+          ctx.fillStyle = "rgba(81,74,64,.55)";
+          var rows = Math.max(1, Math.min(4, Math.round(bh / 8)));
+          for (var r = 0; r < rows; r++) {
+            ctx.fillRect(bx, by + r * 7, bw * (r === rows - 1 ? 0.6 : 1), 3);
+          }
+        }
+      } else if (e.kind === "video") {
+        var vg = e.geom;
+        ctx.fillStyle = "#221d19";
+        ctx.fillRect(vg.x * THUMB_W, vg.y * THUMB_H, vg.w * THUMB_W, vg.h * THUMB_H);
+        if (e.poster) {
+          var vm = new Image();
+          (function (vx, vy, vw, vh) {
+            vm.onload = function () {
+              if (!ctx.canvas.isConnected) return;
+              try { ctx.drawImage(vm, vx, vy, vw, vh); } catch (err) { /* ignore */ }
+            };
+          })(vg.x * THUMB_W, vg.y * THUMB_H, vg.w * THUMB_W, vg.h * THUMB_H);
+          vm.src = e.poster;
+        }
+      } else if (e.kind === "shape") {
+        var sg = e.geom;
+        ctx.fillStyle = e.fill ? ("#" + e.fill) : "rgba(168,82,41,.5)";
+        ctx.fillRect(sg.x * THUMB_W, sg.y * THUMB_H, sg.w * THUMB_W, sg.h * THUMB_H);
+      }
+    });
+  }
+
+  function thumbsBuild() {
+    if (thumbsBuilt || !slides.length) return;
+    thumbsBuilt = true;
+    thumbsBox.innerHTML = "";
+    thumbBtns = slides.map(function (slide, i) {
+      var b = document.createElement("button");
+      b.className = "thumb";
+      b.type = "button";
+      b.setAttribute("aria-label", "Slajd " + (i + 1));
+      b.title = "Slajd " + (i + 1);
+      var c = document.createElement("canvas");
+      b.appendChild(c);
+      var n = document.createElement("span");
+      n.className = "num";
+      n.textContent = (i + 1);
+      b.appendChild(n);
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        clearFocus();
+        renderSlide(i, i > index ? "next" : "prev");
+      });
+      thumbsBox.appendChild(b);
+      paintThumb(slide, c);
+      return b;
+    });
+    thumbsMark(index);
+    thumbsEnsureVisible(index);
+  }
+
+  function thumbsMark(i) {
+    thumbBtns.forEach(function (b, k) {
+      b.classList.toggle("active", k === i);
+    });
+  }
+
+  function thumbsEnsureVisible(i) {
+    var b = thumbBtns[i];
+    if (b && b.scrollIntoView) {
+      try { b.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); }
+      catch (e) { /* older browsers — ignore */ }
+    }
+  }
+
+  function thumbsJumpUnderPointer(ev) {
+    var boxR = thumbsBox.getBoundingClientRect();
+    // pointer must be over the strip itself
+    if (ev.clientX < boxR.left || ev.clientX > boxR.right ||
+        ev.clientY < boxR.top || ev.clientY > boxR.bottom) return;
+    var best = -1, bestD = 1e9;
+    thumbBtns.forEach(function (b, i) {
+      var r = b.getBoundingClientRect();
+      // pointer over a miniature (with small tolerance while scrolling)?
+      if (ev.clientX >= r.left - 6 && ev.clientX <= r.right + 6 &&
+          ev.clientY >= r.top - 6 && ev.clientY <= r.bottom + 6) {
+        var cx = Math.max(r.left, Math.min(r.right, ev.clientX));
+        var cy = Math.max(r.top, Math.min(r.bottom, ev.clientY));
+        var d = Math.abs(ev.clientX - cx) + Math.abs(ev.clientY - cy);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+    });
+    if (best < 0 || best === index) return;
+    clearFocus();
+    renderSlide(best, best > index ? "next" : "prev");
+  }
+
+  thumbsBox.addEventListener("wheel", function (ev) {
+    // wheel over the strip: scroll the strip AND jump to the miniature
+    // currently under the mouse pointer (debounced)
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (thumbsIsVertical()) thumbsBox.scrollTop += (ev.deltaY || ev.deltaX);
+    else thumbsBox.scrollLeft += (Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY);
+    if (thumbHoverTimer) clearTimeout(thumbHoverTimer);
+    thumbHoverTimer = setTimeout(function () { thumbsJumpUnderPointer(ev); }, 90);
+  }, { passive: false });
+
+  thumbsBox.addEventListener("mousemove", function (ev) {
+    // moving the pointer across miniatures changes the slide
+    if (thumbHoverTimer) clearTimeout(thumbHoverTimer);
+    thumbHoverTimer = setTimeout(function () { thumbsJumpUnderPointer(ev); }, 90);
+  }, { passive: true });
+
+  window.addEventListener("resize", function () {
+    if (index >= 0) thumbsEnsureVisible(index);
+  });
 
   /* ------------------------------------------------------- navigation */
   function go(delta) {
@@ -1364,6 +1613,7 @@
         setMuteButtonLabel();
         elTot.textContent = slides.length;
         resize();
+        thumbsBuild();
         var deep = deepLinkIndex();
         if (deep >= 0 && deep < slides.length) {
           renderSlide(deep);
