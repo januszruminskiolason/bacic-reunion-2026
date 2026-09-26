@@ -244,27 +244,72 @@
     background:#141210;color:var(--cream);font-size:15px;line-height:1.7;padding:40px;text-align:center;}
   #error code{color:var(--gold);}
 
-  /* ---------- slide thumbnails strip ---------- */
-  #thumbs{position:fixed;z-index:120;display:flex;gap:10px;padding:10px;
+  /* ---------- slide thumbnails: hidden strip + discreet edge tab ----------
+     PC: strip is hidden; a small tab on the screen edge opens it on hover,
+     and it closes when the pointer leaves. The stage always reserves room
+     for the strip area so slides are never covered.
+     Mobile (coarse pointer): strip is always visible; tap the tab to
+     collapse/expand it. */
+  #thumbstab{position:fixed;z-index:121;display:none;align-items:center;justify-content:center;
+    background:rgba(20,18,16,.72);border:1px solid rgba(201,166,69,.45);color:var(--gold);
+    cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.5);box-sizing:border-box;
+    font-size:13px;line-height:1;padding:0;}
+  #thumbstab:hover{background:rgba(168,82,41,.85);color:#fff;}
+  #thumbstab:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+  #thumbs{position:fixed;z-index:120;display:none;gap:10px;padding:10px;
     background:rgba(20,18,16,.72);border:1px solid rgba(201,166,69,.25);
     box-shadow:0 8px 30px rgba(0,0,0,.5);box-sizing:border-box;
     scrollbar-width:thin;scrollbar-color:var(--gold) rgba(255,255,255,.08);}
   #thumbs::-webkit-scrollbar{height:8px;width:8px;}
   #thumbs::-webkit-scrollbar-thumb{background:var(--gold);border-radius:4px;}
   #thumbs::-webkit-scrollbar-track{background:rgba(255,255,255,.08);border-radius:4px;}
-  /* landscape / wide screens: vertical strip on the right */
-  @media (min-aspect-ratio: 1/1){
-    #thumbs{right:10px;top:50%;transform:translateY(-50%);flex-direction:column;
-      max-height:92vh;max-width:172px;overflow-y:auto;overflow-x:hidden;border-radius:14px;}
-    #thumbs .thumb{width:140px;height:79px;}
+  body.thumbs-open #thumbs{display:flex;}
+  /* fine pointer (PC): edge tab only, strip overlays reserved space on hover */
+  @media (pointer:fine){
+    /* landscape / wide screens: vertical strip on the right */
+    @media (min-aspect-ratio: 1/1){
+      #thumbstab{display:flex;right:0;top:50%;transform:translateY(-50%);
+        width:26px;height:120px;border-radius:10px 0 0 10px;border-right:none;}
+      body.thumbs-open #thumbstab{display:none;}
+      body.thumbs-open #thumbs{right:10px;top:50%;transform:translateY(-50%);flex-direction:column;
+        max-height:92vh;max-width:172px;overflow-y:auto;overflow-x:hidden;border-radius:14px;}
+      body.thumbs-open #thumbs .thumb{width:140px;height:79px;}
+    }
+    /* portrait / tall screens: horizontal strip on top */
+    @media (max-aspect-ratio: 1/1){
+      #thumbstab{display:flex;top:0;left:50%;transform:translateX(-50%);
+        width:120px;height:24px;border-radius:0 0 10px 10px;border-top:none;}
+      body.thumbs-open #thumbstab{display:none;}
+      body.thumbs-open #thumbs{left:50%;top:8px;transform:translateX(-50%);flex-direction:row;
+        max-width:96vw;overflow-x:auto;overflow-y:hidden;border-radius:14px;}
+      body.thumbs-open #thumbs .thumb{width:128px;height:72px;flex:0 0 auto;}
+    }
   }
-  /* portrait / tall screens (incl. phones): horizontal strip on top */
-  @media (max-aspect-ratio: 1/1){
-    #thumbs{left:50%;top:8px;transform:translateX(-50%);flex-direction:row;
-      max-width:96vw;overflow-x:auto;overflow-y:hidden;border-radius:14px;}
-    #thumbs .thumb{width:128px;height:72px;flex:0 0 auto;}
-    /* keep mute/volume reachable: dock them below the top strip */
-    #volwrap{right:12px;bottom:auto;top:112px;}
+  /* coarse pointer (touch): strip always visible unless collapsed via tab */
+  @media (pointer:coarse){
+    #thumbs{display:flex;}
+    body.thumbs-collapsed #thumbs{display:none;}
+    #thumbstab{display:none;}
+    body.thumbs-collapsed #thumbstab{display:flex;}
+    /* landscape / wide screens: vertical strip on the right */
+    @media (min-aspect-ratio: 1/1){
+      #thumbs{right:10px;top:50%;transform:translateY(-50%);flex-direction:column;
+        max-height:92vh;max-width:172px;overflow-y:auto;overflow-x:hidden;border-radius:14px;}
+      #thumbs .thumb{width:140px;height:79px;}
+      #thumbstab{right:0;top:50%;transform:translateY(-50%);
+        width:26px;height:120px;border-radius:10px 0 0 10px;border-right:none;}
+    }
+    /* portrait / tall screens (incl. phones): horizontal strip on top */
+    @media (max-aspect-ratio: 1/1){
+      #thumbs{left:50%;top:8px;transform:translateX(-50%);flex-direction:row;
+        max-width:96vw;overflow-x:auto;overflow-y:hidden;border-radius:14px;}
+      #thumbs .thumb{width:128px;height:72px;flex:0 0 auto;}
+      #thumbstab{top:0;left:50%;transform:translateX(-50%);
+        width:120px;height:24px;border-radius:0 0 10px 10px;border-top:none;}
+      /* keep mute/volume reachable: dock them below the top strip */
+      #volwrap{right:12px;bottom:auto;top:112px;}
+      body.thumbs-collapsed #volwrap{top:auto;bottom:18px;}
+    }
   }
   /* short landscape phones: slimmer strip + smaller thumbs */
   @media (min-aspect-ratio: 1/1) and (max-height: 500px){
@@ -290,6 +335,7 @@
   </div>
 
   <div id="hud-caption"></div>
+  <button id="thumbstab" type="button" aria-label="Pokaż miniatury slajdów" title="Miniatury slajdów">❮</button>
   <div id="thumbs" role="navigation" aria-label="Miniatury slajdów"></div>
   <div id="counter"><b id="cur">1</b> / <span id="tot">–</span></div>
   <div id="brand">Rodzina <span>Bacic</span></div>
@@ -1452,6 +1498,50 @@
     if (index >= 0) thumbsEnsureVisible(index);
   });
 
+  /* --- thumbs show/hide: PC opens the hidden strip via the edge tab,
+         closes when the pointer leaves strip+tab; touch toggles via tab --- */
+  var thumbsTab = document.getElementById("thumbstab");
+  var finePointer = (window.matchMedia && window.matchMedia("(pointer:fine)").matches) &&
+                    !(window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+  var thumbsCloseTimer = null;
+
+  function thumbsOpen() {
+    document.body.classList.add("thumbs-open");
+    if (thumbsCloseTimer) { clearTimeout(thumbsCloseTimer); thumbsCloseTimer = null; }
+    if (index >= 0) thumbsEnsureVisible(index);
+    resize();
+  }
+  function thumbsClose() {
+    if (thumbsCloseTimer) clearTimeout(thumbsCloseTimer);
+    thumbsCloseTimer = setTimeout(function () {
+      document.body.classList.remove("thumbs-open");
+      resize();
+    }, 180);
+  }
+  function thumbsCancelClose() {
+    if (thumbsCloseTimer) { clearTimeout(thumbsCloseTimer); thumbsCloseTimer = null; }
+  }
+  if (thumbsTab) {
+    if (finePointer) {
+      thumbsTab.addEventListener("mouseenter", thumbsOpen, { passive: true });
+      thumbsTab.addEventListener("click", thumbsOpen);
+    } else {
+      // touch: tap the tab to collapse/expand the strip
+      thumbsTab.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        document.body.classList.toggle("thumbs-collapsed");
+        if (!document.body.classList.contains("thumbs-collapsed") && index >= 0) {
+          thumbsEnsureVisible(index);
+        }
+        resize();
+      });
+    }
+  }
+  thumbsBox.addEventListener("mouseenter", thumbsCancelClose, { passive: true });
+  thumbsBox.addEventListener("mouseleave", function () {
+    if (finePointer) thumbsClose();
+  }, { passive: true });
+
   /* ------------------------------------------------------- navigation */
   function go(delta) {
     var target = index + delta;
@@ -1587,10 +1677,35 @@
   help.addEventListener("click", function () { help.classList.add("hide"); });
 
   /* ------------------------------------------------------- scale stage */
+  // Space reserved for the thumbnails UI so the slides are never covered:
+  // PC (fine pointer): only the slim edge tab (26px right / 24px top) when
+  // closed; the full strip (172px right / ~102px top) while it is open.
+  // Touch: the full strip, or just the tab when collapsed.
+  function thumbsReserve() {
+    var vertical = true;
+    try { vertical = window.matchMedia("(min-aspect-ratio: 1/1)").matches; }
+    catch (e) { vertical = window.innerWidth >= window.innerHeight; }
+    var coarse = window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
+    var collapsed = document.body.classList.contains("thumbs-collapsed");
+    var open = document.body.classList.contains("thumbs-open");
+    if (vertical) {
+      if (coarse) return (collapsed ? { x: 26 + 8, y: 0 } : { x: 172 + 16, y: 0 });
+      return (open ? { x: 172 + 16, y: 0 } : { x: 26 + 8, y: 0 });
+    }
+    if (coarse) return (collapsed ? { x: 0, y: 24 + 8 } : { x: 0, y: 102 + 14 });
+    return (open ? { x: 0, y: 102 + 14 } : { x: 0, y: 24 + 8 });
+  }
   function resize() {
-    var s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    var r = thumbsReserve();
+    var availW = Math.max(320, window.innerWidth - r.x);
+    var availH = Math.max(240, window.innerHeight - r.y);
+    var s = Math.min(availW / STAGE_W, availH / STAGE_H);
     s *= 0.985;
     stage.style.setProperty("--s", s);
+    // centre the stage inside the remaining area (shift away from the strip)
+    var cx = (window.innerWidth - r.x) / 2, cy = (window.innerHeight - r.y) / 2;
+    stage.style.left = cx + "px";
+    stage.style.top = cy + "px";
     stage.style.transform = "translate(-50%,-50%) scale(" + s + ")";
   }
   window.addEventListener("resize", resize);
