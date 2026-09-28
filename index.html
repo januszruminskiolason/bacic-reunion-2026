@@ -68,7 +68,12 @@
   .el.vid:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
 
   .el.text{display:flex;flex-direction:column;white-space:pre-wrap;line-height:1.2;
-    padding:4px 8px;box-sizing:border-box;}
+    padding:4px 8px;box-sizing:border-box;pointer-events:none;}
+  .el.text a{pointer-events:auto;}
+  /* text boxes that actually contain visible text still need selection above photos */
+  .el.text.has-text{pointer-events:auto;}
+  /* but an (almost) empty text box must never block clicks on photos underneath */
+  .el.text.empty-text{pointer-events:none !important;}
   .el.text.v-t{align-items:flex-start;}
   .el.text.v-ctr{align-items:center;}
   .el.text.v-b{align-items:flex-end;}
@@ -503,7 +508,11 @@
       // transfer all paragraphs from box to prose
       while (box.firstChild) prose.appendChild(box.firstChild);
       box.appendChild(prose);
-                }
+    }
+    // mark text boxes: empty/whitespace-only boxes must not block clicks on
+    // photos below them; boxes with real text keep pointer events for selection
+    var visibleChars = (box.textContent || "").replace(/\s+/g, "").length;
+    box.classList.add(visibleChars === 0 ? "empty-text" : "has-text");
     return box;
   }
 
@@ -644,15 +653,15 @@
       wrap.classList.toggle("zoomed", st.zoom > 1);
       st.hint.innerHTML = st.zoom <= 1
         ? (st.coarse
-          ? "Dotknij, aby powiększyć do <b>150%</b> · dwoma palcami: zoom 100–500%"
-          : "Kliknij obraz, aby powiększyć do <b>150%</b> · kółko myszy: zoom 100–500%")
+          ? "Dotknij, aby powiększyć do <b>150%</b> · dwoma palcami: zoom 100–750%"
+          : "Kliknij obraz, aby powiększyć do <b>150%</b> · kółko myszy: zoom 100–750%")
         : (st.coarse
           ? "Zoom: <b>" + Math.round(st.zoom * 100) + "%</b> · przeciągnij palcem, aby przesuwać · dotknij, aby wrócić"
           : "Zoom: <b>" + Math.round(st.zoom * 100) + "%</b> · najedź myszą, aby przesuwać · kliknij, aby wrócić");
     }
 
     function setZoom(z, cx, cy) {
-      z = Math.max(1, Math.min(5, Math.round(z * 2) / 2)); // 50% steps, 100%..500%
+      z = Math.max(1, Math.min(7.5, Math.round(z * 2) / 2)); // 50% steps, 100%..750%
       if (z === st.zoom) { layout(st.top, st.viewW, st.viewH); return; }
       if (z <= 1) { st.zoom = 1; st.panX = 0; st.panY = 0; }
       else {
@@ -706,7 +715,7 @@
       layout(st.top, st.viewW, st.viewH);
     });
     // touch: one-finger drag pans the zoomed image, two-finger pinch zooms
-    // 100%..500% (50% steps on release). Gestures never switch slides.
+    // 100%..750% (50% steps on release). Gestures never switch slides.
     var dragX = 0, dragY = 0, dragging = false;
     var pinchD0 = 0, pinchZoom0 = 1, pinchCX = 0, pinchCY = 0, pinching = false;
     var tapTimer = null, tapX = 0, tapY = 0, tapCount = 0;
@@ -765,7 +774,7 @@
         // live pinch: zoom continuously, snap to 50% steps on release
         var d = Math.max(1, touchDist(ev.touches));
         var m = touchMid(ev.touches);
-        var zRaw = Math.max(1, Math.min(5, pinchZoom0 * d / pinchD0));
+        var zRaw = Math.max(1, Math.min(7.5, pinchZoom0 * d / pinchD0));
         var r = wrap.getBoundingClientRect();
         var sx = (m.x - r.left) * (st.viewW / r.width);
         var sy = (m.y - r.top) * (st.viewH / r.height);
@@ -800,7 +809,7 @@
         if (ev.touches.length < 2) {
           pinching = false; st.pinching = false;
           // snap live pinch zoom to 50% steps, keep pinch midpoint stable
-          var snapped = Math.max(1, Math.min(5, Math.round(st.zoom * 2) / 2));
+          var snapped = Math.max(1, Math.min(7.5, Math.round(st.zoom * 2) / 2));
           var keepZ = st.zoom;
           st.zoom = snapped;
           if (snapped <= 1) { st.panX = 0; st.panY = 0; }
@@ -822,7 +831,7 @@
       }
       dragging = false;
       // one-finger tap (not a drag, single touch): single tap toggles zoom,
-      // double tap zooms in further (+50% each, up to 500%).
+      // double tap zooms in further (+50% each, up to 750%).
       // The emulated mouse click is suppressed; the tap timer performs the toggle.
       if (ev.touches.length === 0 && !touchMoved &&
           !(st.suppressClickUntil && Date.now() < st.suppressClickUntil)) {
@@ -836,7 +845,7 @@
           }, 280);
         } else {
           killTap();
-          var stepZ = st.zoom <= 1 ? 1.5 : Math.min(5, Math.round((st.zoom + 0.5) * 2) / 2);
+          var stepZ = st.zoom <= 1 ? 1.5 : Math.min(7.5, Math.round((st.zoom + 0.5) * 2) / 2);
           setZoom(stepZ, t.clientX, t.clientY);
         }
       }
